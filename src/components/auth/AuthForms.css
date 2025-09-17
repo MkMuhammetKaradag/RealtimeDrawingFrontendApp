@@ -1,0 +1,78 @@
+/* src/components/auth/AuthForms.css */
+
+.auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: 15px; /* Form elemanları arasında boşluk bırakır */
+  width: 100%;
+  max-width: 400px; /* Formun genişliğini sınırlar */
+  padding: 2rem;
+  background-color: #f8f9fa; /* Hafif bir arka plan rengi */
+  border-radius: 8px; /* Köşeleri yuvarlar */
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); /* Hafif bir gölge efekti */
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+}
+
+.form-group label {
+  font-weight: 600;
+  margin-bottom: 5px;
+  color: #343a40;
+}
+
+.form-group input {
+  padding: 12px;
+  border: 1px solid #ced4da;
+  border-radius: 6px;
+  font-size: 1rem;
+  transition: border-color 0.3s;
+}
+
+.form-group input:focus {
+  outline: none;
+  border-color: #007bff; /* Focus durumunda kenarlık rengi */
+}
+
+.submit-button {
+  padding: 12px;
+  background-color: #007bff;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 1.1rem;
+  font-weight: bold;
+  cursor: pointer;
+  transition: background-color 0.3s, opacity 0.3s;
+}
+
+.submit-button:hover {
+  background-color: #0056b3;
+}
+
+.submit-button:disabled {
+  background-color: #adb5bd;
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+.auth-error-message {
+  color: #dc3545; /* Kırmızı renk */
+  background-color: #f8d7da; /* Açık kırmızı arka plan */
+  border: 1px solid #f5c6cb;
+  padding: 10px;
+  border-radius: 6px;
+  text-align: center;
+  margin-bottom: 10px;
+}
+.auth-success-message {
+  color: #155724; /* Yeşil renk */
+  background-color: #d4edda; /* Açık yeşil arka plan */
+  border: 1px solid #c3e6cb;
+  padding: 10px;
+  border-radius: 6px;
+  text-align: center;
+  margin-bottom: 10px;
+}
