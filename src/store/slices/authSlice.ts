@@ -13,7 +13,6 @@ import {
   register,
   logout as logoutApi,
 } from '../../services/auth.service';
-import { formToJSON } from 'axios';
 import { REHYDRATE } from 'redux-persist';
 
 // 1. Durum Arayüzü (State Interface)
@@ -98,6 +97,10 @@ const authSlice = createSlice({
     updateUser: (state, action: PayloadAction<User>) => {
       state.user = action.payload;
     },
+    forceLogout: (state) => {
+      Object.assign(state, initialState); // Tarayıcıdan oturum çerezini temizlemek için bir fonksiyon çağır
+      document.cookie = 'Session=; Max-Age=0; Path=/;';
+    },
   },
   // 4. Asenkron İşlemlerin Durumunu Yöneten `extraReducers`
   // `createAsyncThunk`'ın oluşturduğu `pending`, `fulfilled`, `rejected`
@@ -166,7 +169,7 @@ const authSlice = createSlice({
 
 // Aksiyon oluşturucularını dışa aktarıyoruz. Bileşenlerden bu aksiyonları
 // `dispatch` ederek state'i değiştirebiliriz.
-export const { resetAuthState, updateUser } = authSlice.actions;
+export const { resetAuthState, updateUser, forceLogout } = authSlice.actions;
 
 // Reducer'ı dışa aktarıyoruz. Bu reducer, `store.ts` dosyasında kullanılacaktır.
 export default authSlice.reducer;

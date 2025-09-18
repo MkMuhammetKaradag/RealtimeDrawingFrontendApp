@@ -1,7 +1,7 @@
 // src/store/store.ts
 
 import { configureStore } from '@reduxjs/toolkit';
-import authReducer from './slices/authSlice';
+
 import {
   persistStore,
   persistReducer,
@@ -13,27 +13,24 @@ import {
   REGISTER,
 } from 'redux-persist';
 import storage from 'redux-persist/lib/storage';
-
+import { combineReducers } from 'redux';
+import authReducer from './slices/authSlice';
 // 1. Kalıcılık (Persist) Ayarları
 const persistConfig = {
-  key: 'auth',
+  key: 'root',
   storage,
-  whitelist: ['user', 'isAuthenticated'], // Sadece belirli alanları persist et
+  whitelist: ['auth'], // Sadece belirli alanları persist et
 };
 // 2. Root reducer'ı oluştur
-const rootReducer = {
+const rootReducer = combineReducers({
   auth: authReducer,
   // Diğer reducer'lar buraya eklenecek
-};
+});
 
 // 3. Persist edilmiş reducer'ı oluştur
-const persistedReducer = persistReducer(persistConfig, authReducer);
-
+const persistedReducer = persistReducer(persistConfig, rootReducer);
 export const store = configureStore({
-  reducer: {
-    auth: persistedReducer,
-    // Diğer slice'lar buraya eklenecek
-  },
+  reducer: persistedReducer,
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({
       serializableCheck: {
