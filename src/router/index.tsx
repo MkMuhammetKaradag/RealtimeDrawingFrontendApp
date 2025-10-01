@@ -7,9 +7,10 @@ import {
   selectAuthStatus,
   selectIsAuthenticated,
 } from '../store/slices/authSlice';
-import HomePage from '../pages/HomePage';
+import HomePage from '../pages/HomePage/index';
 import AuthPage from '../pages/AuthPage';
 import NotFoundPage from '../pages/NotFoundPage';
+import GamePage from '../pages/GsamePage/GamePage';
 
 // Korumalı Yol Bileşeni
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
@@ -51,7 +52,14 @@ const AppRouter = () => {
           </ProtectedRoute>
         }
       />
-
+      <Route
+        path="/game/:room_id"
+        element={
+          <ProtectedRoute>
+            <GamePage />
+          </ProtectedRoute>
+        }
+      />
       {/* Tanımlanmamış tüm yollar için 404 sayfası */}
       <Route path="*" element={<NotFoundPage />} />
     </Routes>
