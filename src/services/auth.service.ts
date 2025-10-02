@@ -20,31 +20,6 @@ const api = axios.create({
   },
   withCredentials: true,
 });
-// api.interceptors.response.use(
-//   (response) => {
-//     // Backend'den gelen özel bir header'ı kontrol et
-//     const isRefreshNeeded = response.headers['x-refresh-needed'] === 'true';
-
-//     if (isRefreshNeeded) {
-//       // Eğer yenileme sinyali varsa, arka planda yenileme isteği at
-//       refreshToken().catch((refreshError) => {
-//         // Yenileme başarısız olursa (cihaz değişimi vb.), kullanıcıyı çıkışa yönlendir
-//         window.location.href = '/auth';
-//       });
-//     }
-//     return response; // Orijinal yanıtı ilet
-//   },
-//   (error) => {
-//     // Eğer 401 hatası gelirse, oturum tamamen bitmiş demektir.
-//     // Kullanıcıyı login sayfasına yönlendir.
-//     console.log('status:', error.response.status);
-//     if (error.response.status === 401) {
-//       store.dispatch(forceLogout());
-//       window.location.href = '/login';
-//     }
-//     return Promise.reject(error);
-//   }
-// );
 
 export const setupInterceptors = (store: any) => {
   api.interceptors.response.use(

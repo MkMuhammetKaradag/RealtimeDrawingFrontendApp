@@ -1,4 +1,4 @@
-import React, {
+import {
   useRef,
   useState,
   useEffect,
@@ -24,25 +24,41 @@ interface Point {
 }
 
 interface StrokeData {
+  strokeId: string;
   points: Point[];
   color: string;
   size: number;
-  filled: boolean; 
-  tool: Tool; 
+  filled: boolean;
+  tool: Tool;
   isBucketFill?: boolean;
   fillPosition?: Point;
   imageData?: ImageData;
 }
-interface RealtimePointPayload {
+
+export interface RealtimePointPayload {
+  type: string;
   point: Point;
-  strokeId: string; 
+  strokeId: string;
   color: string;
   size: number;
-  tool: 'pen' | 'eraser';
+  tool: 'pen' | 'eraser' | 'bucket'; // 'bucket' da ekledik
+  isBucketFill?: boolean; // Boya kovası için
+  fillPosition?: Point; // Boya kovası için
 }
+
 type Tool = 'pen' | 'eraser' | 'line' | 'circle' | 'rectangle' | 'bucket';
 
-const DrawingCanvas: React.FC = () => {
+interface DrawingCanvasProps {
+  canDraw: boolean;
+  sendMessage: (data: any) => void;
+  remoteDrawingPoint: RealtimePointPayload | null; // Yeni prop
+}
+
+const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
+  canDraw,
+  sendMessage,
+  remoteDrawingPoint, // Yeni propu burada alıyoruz
+}) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [isDrawing, setIsDrawing] = useState(false);
   const [currentStroke, setCurrentStroke] = useState<Point[]>([]);
@@ -55,7 +71,7 @@ const DrawingCanvas: React.FC = () => {
   const [showJsonInput, setShowJsonInput] = useState(false);
   const [startPoint, setStartPoint] = useState<Point | null>(null);
   const [tempCanvas, setTempCanvas] = useState<HTMLCanvasElement | null>(null);
-  const [activeStrokeId, setActiveStrokeId] = useState<string>(''); // Aktif vuruşun benzersiz ID'si
+  const [activeStrokeId, setActiveStrokeId] = useState<string>('');
 
   const colors = [
     '#000000',
@@ -71,25 +87,116 @@ const DrawingCanvas: React.FC = () => {
   ];
 
   const sizes = [2, 5, 10, 15, 20];
+
+  // Uzak sunucudan gelen noktayı canvas'a ekleme fonksiyonu
+  const addRemotePointToCanvas = useCallback(
+    (payload: RealtimePointPayload) => {
+      setAllStrokes((prevStrokes) => {
+        // Eğer gelen veri bir boya kovası dolgusu ise
+        if (payload.isBucketFill && payload.fillPosition) {
+          // Geçerli canvas durumunun anlık görüntüsünü al
+          const canvas = canvasRef.current;
+          const ctx = canvas?.getContext('2d');
+          if (!ctx || !canvas) return prevStrokes;
+
+          // Geçici olarak flood fill uygula (sadece görsel olarak, StrokeData'ya ImageData eklenmeli)
+          // Bu kısmı biraz değiştireceğiz, ImageData'yı doğrudan StrokeData'ya ekleyeceğiz.
+          // Flood fill'i burada direkt çalıştırmak yerine, ImageData'yı StrokeData olarak saklayalım.
+          // Ancak bu, flood fill'in diğer istemcilerde doğru şekilde yeniden çizilmesini zorlaştırır.
+          // Daha iyi bir yaklaşım, flood fill'in parametrelerini (başlangıç noktası, renk) göndermek ve
+          // her istemcinin kendi flood fill'ini uygulamasını sağlamaktır.
+
+          // Şimdilik, sadece flood fill'in tetiklendiğini varsayalım
+          const newFillStroke: StrokeData = {
+            strokeId: payload.strokeId,
+            points: [], // Boya kovası için boş points
+            color: payload.color,
+            size: 1, // Boya kovası için size önemli değil
+            filled: true,
+            tool: 'bucket',
+            isBucketFill: true,
+            fillPosition: payload.fillPosition,
+            // ImageData burada olmayacak, her istemci kendi ImageData'sını oluşturacak
+            // veya flood fill işleminin kendisi tetiklenecek.
+          };
+          // Eğer zaten bu fillPosition'a sahip bir bucket fill varsa güncelle, yoksa ekle
+          const existingBucketFillIndex = prevStrokes.findIndex(
+            (s) =>
+              s.tool === 'bucket' &&
+              s.fillPosition?.x === payload.fillPosition?.x &&
+              s.fillPosition?.y === payload.fillPosition?.y
+          );
+
+          if (existingBucketFillIndex !== -1) {
+            const updatedStrokes = [...prevStrokes];
+            updatedStrokes[existingBucketFillIndex] = newFillStroke;
+            return updatedStrokes;
+          } else {
+            return [...prevStrokes, newFillStroke];
+          }
+        } else {
+          // Normal çizim noktası ise
+          const existingStrokeIndex = prevStrokes.findIndex(
+            (s) => s.strokeId === payload.strokeId
+          );
+
+          if (existingStrokeIndex !== -1) {
+            // Var olan stroke'a yeni nokta ekle
+            const newStrokes = [...prevStrokes];
+            newStrokes[existingStrokeIndex] = {
+              ...newStrokes[existingStrokeIndex],
+              points: [
+                ...newStrokes[existingStrokeIndex].points,
+                payload.point,
+              ],
+            };
+            return newStrokes;
+          } else {
+            // Yeni stroke oluştur
+            return [
+              ...prevStrokes,
+              {
+                points: [payload.point],
+                color: payload.color,
+                size: payload.size,
+                filled: false, // Uzaktan gelen kalem/silgi için filled genellikle false'dur
+                tool: payload.tool,
+                strokeId: payload.strokeId,
+              },
+            ];
+          }
+        }
+      });
+    },
+    []
+  );
+
+  // remoteDrawingPoint prop'u değiştiğinde addRemotePointToCanvas'ı çağır
+  useEffect(() => {
+    if (remoteDrawingPoint) {
+      console.log('Uzaktan gelen çizim noktası:', remoteDrawingPoint);
+      addRemotePointToCanvas(remoteDrawingPoint);
+    }
+  }, [remoteDrawingPoint, addRemotePointToCanvas]); // addRemotePointToCanvas bağımlılığı eklendi
+
   useEffect(() => {
     if (activeStrokeId && currentStroke.length > 0) {
-      // En son eklenen noktayı al
       const lastPoint = currentStroke[currentStroke.length - 1];
 
-      // Gönderilecek yükü (payload) oluştur
       const payload: RealtimePointPayload = {
+        type: 'draw',
         point: lastPoint,
         strokeId: activeStrokeId,
-        color: tool === 'eraser' ? '#FFFFFF' : color, // Silgi için beyaz
+        color: tool === 'eraser' ? '#FFFFFF' : color,
         size: tool === 'eraser' ? size * 2 : size,
         tool: tool === 'eraser' ? 'eraser' : 'pen',
       };
 
-      // 🔑 Real-Time Gönderim Simülasyonu: Konsola yazdır
-      // Normalde burada Sunucuya WebSocket/Socket.io ile gönderim yapılırdı
-      console.log('Real-Time Nokta Gönderildi:', payload);
+      const sendMessageData = { type: 'player_move', content: payload };
+      sendMessage(sendMessageData);
     }
-  }, [currentStroke, activeStrokeId, color, size, tool]); // currentStroke her değiştiğinde tetiklenir
+  }, [currentStroke, activeStrokeId, color, size, tool, sendMessage]); // sendMessage bağımlılığı eklendi
+
   useEffect(() => {
     const canvas = canvasRef.current;
     if (canvas) {
@@ -103,7 +210,6 @@ const DrawingCanvas: React.FC = () => {
         ctx.fillRect(0, 0, canvas.width, canvas.height);
       }
 
-      // Geçici canvas oluştur
       const temp = document.createElement('canvas');
       temp.width = 1000;
       temp.height = 600;
@@ -116,16 +222,32 @@ const DrawingCanvas: React.FC = () => {
     const ctx = canvas?.getContext('2d');
     if (!ctx || !canvas) return;
 
-    // Canvas'ı temizle
     ctx.fillStyle = 'white';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
     allStrokes.forEach((stroke) => {
-      if (stroke.isBucketFill && stroke.imageData) {
-        // Boya kovası vuruşlarını direkt ImageData olarak çiz
-        ctx.putImageData(stroke.imageData, 0, 0);
+      // Boya kovası vuruşları için özel işlem
+      if (
+        stroke.tool === 'bucket' &&
+        stroke.isBucketFill &&
+        stroke.fillPosition
+      ) {
+        // Sadece fillPosition ve color'ı alıp floodFill'i yeniden çalıştırın
+        // Bu sayede ImageData'yı göndermeye gerek kalmaz ve her istemci kendi dolgusunu oluşturur
+        try {
+          // Bu, yerel ve uzaktan gelen stroke'lar için doldurmayı sağlar
+          floodFillInternal(
+            ctx,
+            canvas.width,
+            canvas.height,
+            stroke.fillPosition.x, // Tıklanan X
+            stroke.fillPosition.y, // Tıklanan Y
+            stroke.color
+          );
+        } catch (error) {
+          console.error('Flood Fill yeniden uygulama hatası:', error);
+        }
       } else {
-        // Normal vuruşları çiz
         if (stroke.points.length === 0) return;
 
         ctx.strokeStyle = stroke.color;
@@ -135,15 +257,37 @@ const DrawingCanvas: React.FC = () => {
         ctx.lineJoin = 'round';
 
         ctx.beginPath();
-        ctx.moveTo(stroke.points[0].x, stroke.points[0].y);
-
-        for (let i = 1; i < stroke.points.length; i++) {
-          ctx.lineTo(stroke.points[i].x, stroke.points[i].y);
-        }
-
-        if (stroke.filled) {
-          ctx.closePath();
-          ctx.fill();
+        if (stroke.tool === 'line') {
+          ctx.moveTo(stroke.points[0].x, stroke.points[0].y);
+          ctx.lineTo(stroke.points[1].x, stroke.points[1].y);
+          if (stroke.filled) {
+            ctx.lineWidth = stroke.size * 2;
+          }
+        } else if (stroke.tool === 'circle') {
+          const start = stroke.points[0];
+          const end = stroke.points[stroke.points.length - 1]; // Dairenin son noktası (radius için)
+          const radius = Math.sqrt(
+            Math.pow(end.x - start.x, 2) + Math.pow(end.y - start.y, 2)
+          );
+          ctx.arc(start.x, start.y, radius, 0, Math.PI * 2);
+          if (stroke.filled) {
+            ctx.fill();
+          }
+        } else if (stroke.tool === 'rectangle') {
+          const start = stroke.points[0];
+          const corner = stroke.points[2]; // Karşı köşe
+          const width = corner.x - start.x;
+          const height = corner.y - start.y;
+          if (stroke.filled) {
+            ctx.fillRect(start.x, start.y, width, height);
+          }
+          ctx.strokeRect(start.x, start.y, width, height);
+        } else {
+          // Pen ve Eraser için
+          ctx.moveTo(stroke.points[0].x, stroke.points[0].y);
+          for (let i = 1; i < stroke.points.length; i++) {
+            ctx.lineTo(stroke.points[i].x, stroke.points[i].y);
+          }
         }
         ctx.stroke();
       }
@@ -176,7 +320,6 @@ const DrawingCanvas: React.FC = () => {
           ctx.moveTo(startPoint.x, startPoint.y);
           ctx.lineTo(endPoint.x, endPoint.y);
           if (filled) {
-            // Çizgiler için kalın doldurma efekti
             ctx.lineWidth = size * 2;
           }
           ctx.stroke();
@@ -205,8 +348,9 @@ const DrawingCanvas: React.FC = () => {
           break;
 
         case 'pen':
+          // Pen tool için bu kısım muhtemelen çağrılmayacak çünkü pen doğrudan currentStroke'a ekliyor
+          // Ancak kalırsa sorun olmaz
           if (filled) {
-            // Kalem için yuvarlak uç efekti
             ctx.beginPath();
             ctx.arc(endPoint.x, endPoint.y, size / 2, 0, Math.PI * 2);
             ctx.fill();
@@ -220,9 +364,10 @@ const DrawingCanvas: React.FC = () => {
     },
     [startPoint, color, size, tool, filled, redrawCanvas]
   );
+
   const draw = useCallback(
     (event: MouseEvent<HTMLCanvasElement>) => {
-      if (!isDrawing) return;
+      if (!isDrawing || !canDraw) return;
 
       const canvas = canvasRef.current;
       const ctx = canvas?.getContext('2d');
@@ -234,10 +379,8 @@ const DrawingCanvas: React.FC = () => {
       const newPoint: Point = { x: Math.round(x), y: Math.round(y) };
 
       if (tool === 'pen' || tool === 'eraser') {
-        // 🔑 Sadece yeni noktayı diziye ekle
         setCurrentStroke((prev) => [...prev, newPoint]);
 
-        // Yerel çizim (ekranınızda anlık görünmesi için)
         const drawColor = tool === 'eraser' ? '#FFFFFF' : color;
         const drawSize = tool === 'eraser' ? size * 2 : size;
 
@@ -249,28 +392,38 @@ const DrawingCanvas: React.FC = () => {
           ctx.moveTo(lastPoint.x, lastPoint.y);
           ctx.lineTo(newPoint.x, newPoint.y);
           ctx.stroke();
+        } else {
+          // İlk nokta için
+          ctx.strokeStyle = drawColor;
+          ctx.lineWidth = drawSize;
+          ctx.beginPath();
+          ctx.moveTo(newPoint.x, newPoint.y);
+          ctx.lineTo(newPoint.x, newPoint.y);
+          ctx.stroke();
         }
       } else {
-        // ... (şekil çizimi mantığı aynı kalır)
         drawTemporaryShape(newPoint);
       }
     },
-    [isDrawing, currentStroke, color, size, tool, drawTemporaryShape]
+    [isDrawing, currentStroke, color, size, tool, drawTemporaryShape, canDraw]
   );
+
   const startDrawing = (event: MouseEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
-    if (!canvas) return;
+    if (!canvas || !canDraw) return;
 
     const rect = canvas.getBoundingClientRect();
     const x = event.clientX - rect.left;
     const y = event.clientY - rect.top;
     const point: Point = { x: Math.round(x), y: Math.round(y) };
+
     if (tool === 'bucket') {
       handleCanvasClick(event);
       return;
     }
-    const newStrokeId = crypto.randomUUID(); // Veya date.now() kullanabilirsiniz.
-    setActiveStrokeId(newStrokeId); // 🔑 Yeni ID'yi ayarla
+
+    const newStrokeId = crypto.randomUUID();
+    setActiveStrokeId(newStrokeId);
     setIsDrawing(true);
     setCurrentStroke([]);
 
@@ -278,12 +431,22 @@ const DrawingCanvas: React.FC = () => {
       setStartPoint(point);
     } else {
       setCurrentStroke([point]);
-      draw(event);
+      // İlk noktayı gönder
+      const payload: RealtimePointPayload = {
+        type: 'draw',
+        point: point,
+        strokeId: newStrokeId,
+        color: tool === 'eraser' ? '#FFFFFF' : color,
+        size: tool === 'eraser' ? size * 2 : size,
+        tool: tool === 'eraser' ? 'eraser' : 'pen',
+      };
+      sendMessage({ type: 'player_move', content: payload });
     }
   };
 
   const stopDrawing = (event: MouseEvent<HTMLCanvasElement>) => {
     if (!isDrawing) return;
+    if (!canDraw) return;
     setIsDrawing(false);
 
     if (tool === 'line' || tool === 'circle' || tool === 'rectangle') {
@@ -304,18 +467,8 @@ const DrawingCanvas: React.FC = () => {
           points = [startPoint, endPoint];
           break;
         case 'circle':
-          const radius = Math.sqrt(
-            Math.pow(endPoint.x - startPoint.x, 2) +
-              Math.pow(endPoint.y - startPoint.y, 2)
-          );
-          const numPoints = Math.max(100, Math.round(radius * 2));
-          for (let i = 0; i <= numPoints; i++) {
-            const angle = (i / numPoints) * Math.PI * 2;
-            points.push({
-              x: Math.round(startPoint.x + radius * Math.cos(angle)),
-              y: Math.round(startPoint.y + radius * Math.sin(angle)),
-            });
-          }
+          // Daire için, sadece merkez ve bir nokta yeterlidir
+          points = [startPoint, endPoint];
           break;
         case 'rectangle':
           points = [
@@ -323,12 +476,12 @@ const DrawingCanvas: React.FC = () => {
             { x: endPoint.x, y: startPoint.y },
             endPoint,
             { x: startPoint.x, y: endPoint.y },
-            startPoint,
           ];
           break;
       }
 
       const finalStrokeData: StrokeData = {
+        strokeId: activeStrokeId,
         points,
         color,
         size,
@@ -339,23 +492,45 @@ const DrawingCanvas: React.FC = () => {
       setAllStrokes((prev) => [...prev, finalStrokeData]);
       setStartPoint(null);
       console.log('Yeni Şekil Vuruşu:', finalStrokeData);
+
+      // Şekil çizimini diğer istemcilere gönder
+      // Bu, points dizisini göndermeyi gerektirecektir, bu da daha büyük bir payload olabilir
+      // Ya da sadece startPoint, endPoint, tool, color, size, filled gönderilip
+      // her istemcinin şekli kendi tarafında yeniden oluşturması sağlanabilir.
+      // Basitlik adına tüm points'i gönderelim, ancak performans için iyileştirilebilir.
+      sendMessage({
+        type: 'player_move',
+        content: {
+          type: 'shape_draw', // Yeni bir tip belirleyelim
+          strokeId: activeStrokeId,
+          points: points,
+          color: color,
+          size: size,
+          filled: filled,
+          tool: tool,
+        },
+      });
     } else {
       if (currentStroke.length > 0) {
         const finalStrokeData: StrokeData = {
+          strokeId: activeStrokeId,
           points: currentStroke,
           color: tool === 'eraser' ? '#FFFFFF' : color,
           size: tool === 'eraser' ? size * 2 : size,
-          filled,
+          filled, // Kalem/Silgi için filled prop'unu kullan
           tool,
         };
 
         setAllStrokes((prev) => [...prev, finalStrokeData]);
         console.log('Yeni Çizim Vuruşu:', finalStrokeData);
+        // Kalem/Silgi vuruşu zaten her noktada gönderildiği için burada tekrar göndermeye gerek olmayabilir
+        // Ancak stroke tamamlandığında bir "stroke_end" mesajı göndermek iyi bir uygulama olabilir.
       }
     }
     setActiveStrokeId('');
     setCurrentStroke([]);
   };
+
   const renderFillControl = () => (
     <div className="flex gap-2 p-2 bg-gray-100 rounded-lg items-center">
       <button
@@ -387,11 +562,14 @@ const DrawingCanvas: React.FC = () => {
       ctx.fillStyle = 'white';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
     }
+    sendMessage({ type: 'clear_canvas' }); // Diğer istemcilere tuvalin temizlendiğini bildir
   };
 
   const undoStroke = () => {
     if (allStrokes.length > 0) {
+      const lastStroke = allStrokes[allStrokes.length - 1];
       setAllStrokes((prev) => prev.slice(0, -1));
+      sendMessage({ type: 'undo_stroke', strokeId: lastStroke.strokeId }); // Diğer istemcilere geri alındığını bildir
     }
   };
 
@@ -399,19 +577,26 @@ const DrawingCanvas: React.FC = () => {
     try {
       const data = JSON.parse(jsonInput);
       if (Array.isArray(data)) {
-        // Import edilen verileri mevcut canvas'a çiz
         const canvas = canvasRef.current;
         const ctx = canvas?.getContext('2d');
         if (ctx && canvas) {
-          data.forEach((stroke) => {
+          // Mevcut çizimleri temizlemeden eklemek için
+          // clearCanvas(); // İsteğe bağlı: Önce tuvali temizle
+          data.forEach((stroke: StrokeData) => {
             if (stroke.isBucketFill && stroke.fillPosition) {
-              floodFill(
-                stroke.fillPosition.x,
-                stroke.fillPosition.y,
-                stroke.color
-              );
+              // floodFill fonksiyonu yerine, burada bir olay tetikleyip
+              // sunucuya göndermek ve diğer istemcilerin de aynı fill işlemini yapmasını sağlamak daha iyi
+              // Şimdilik sadece yerel olarak ekleyelim
+              setAllStrokes((prev) => [
+                ...prev,
+                { ...stroke, strokeId: crypto.randomUUID() },
+              ]);
+              // floodFill(stroke.fillPosition.x, stroke.fillPosition.y, stroke.color);
             } else {
-              setAllStrokes((prev) => [...prev, stroke]);
+              setAllStrokes((prev) => [
+                ...prev,
+                { ...stroke, strokeId: crypto.randomUUID() },
+              ]);
             }
           });
         }
@@ -424,7 +609,6 @@ const DrawingCanvas: React.FC = () => {
   };
 
   const exportData = () => {
-    // ImageData'yı JSON'a çeviremeyeceğimiz için, export ederken kaldırıyoruz
     const exportableStrokes = allStrokes.map((stroke) => {
       const { imageData, ...exportableStroke } = stroke;
       return exportableStroke;
@@ -439,37 +623,30 @@ const DrawingCanvas: React.FC = () => {
     link.click();
     URL.revokeObjectURL(url);
   };
-  // Flood fill algoritması
-  const floodFill = (startX: number, startY: number, fillColor: string) => {
-    const canvas = canvasRef.current;
-    const ctx = canvas?.getContext('2d');
-    if (!ctx || !canvas) return;
 
-    const beforeFillImageData = ctx.getImageData(
-      0,
-      0,
-      canvas.width,
-      canvas.height
-    );
-
-    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  // Flood fill algoritması (içsel kullanım için)
+  const floodFillInternal = (
+    ctx: CanvasRenderingContext2D,
+    canvasWidth: number,
+    canvasHeight: number,
+    startX: number,
+    startY: number,
+    fillColor: string
+  ) => {
+    const imageData = ctx.getImageData(0, 0, canvasWidth, canvasHeight);
     const pixels = imageData.data;
 
-    // Başlangıç noktasının rengini al
-    const startPos = (startY * canvas.width + startX) * 4;
+    const startPos = (startY * canvasWidth + startX) * 4;
     const startR = pixels[startPos];
     const startG = pixels[startPos + 1];
     const startB = pixels[startPos + 2];
     const startA = pixels[startPos + 3];
 
-    // Yeni rengi RGB formatına çevir
     const fillRGB = hexToRgb(fillColor);
     if (!fillRGB) return;
 
-    // Renk toleransı
-    const tolerance = 1;
+    const tolerance = 5;
 
-    // Aynı renkteki pikselleri kontrol et
     const matchStartColor = (pos: number) => {
       return (
         Math.abs(pixels[pos] - startR) <= tolerance &&
@@ -479,7 +656,6 @@ const DrawingCanvas: React.FC = () => {
       );
     };
 
-    // Pikseli yeni renkle değiştir
     const colorPixel = (pos: number) => {
       pixels[pos] = fillRGB.r;
       pixels[pos + 1] = fillRGB.g;
@@ -487,54 +663,80 @@ const DrawingCanvas: React.FC = () => {
       pixels[pos + 3] = 255;
     };
 
-    // Flood fill algoritması
     const stack: [number, number][] = [[startX, startY]];
-    const maxSize = canvas.width * canvas.height;
     const visited = new Set<string>();
 
-    while (stack.length && visited.size < maxSize) {
+    while (stack.length && visited.size < canvasWidth * canvasHeight) {
       const [x, y] = stack.pop()!;
       const key = `${x},${y}`;
 
       if (visited.has(key)) continue;
       visited.add(key);
 
-      const pos = (y * canvas.width + x) * 4;
+      if (x < 0 || x >= canvasWidth || y < 0 || y >= canvasHeight) continue; // Sınır kontrolü
+
+      const pos = (y * canvasWidth + x) * 4;
       if (!matchStartColor(pos)) continue;
 
       colorPixel(pos);
 
-      // 4 yöne yayıl
       if (x > 0) stack.push([x - 1, y]);
-      if (x < canvas.width - 1) stack.push([x + 1, y]);
+      if (x < canvasWidth - 1) stack.push([x + 1, y]);
       if (y > 0) stack.push([x, y - 1]);
-      if (y < canvas.height - 1) stack.push([x, y + 1]);
+      if (y < canvasHeight - 1) stack.push([x, y + 1]);
     }
 
     ctx.putImageData(imageData, 0, 0);
+  };
 
-    // Dolgu işlemini strokes'a ekle
+  const floodFill = (startX: number, startY: number, fillColor: string) => {
+    const canvas = canvasRef.current;
+    const ctx = canvas?.getContext('2d');
+    if (!ctx || !canvas) return;
+
+    const newStrokeId = crypto.randomUUID();
+
+    // Yerel olarak dolguyu uygula
+    floodFillInternal(
+      ctx,
+      canvas.width,
+      canvas.height,
+      startX,
+      startY,
+      fillColor
+    );
+
     const fillStroke: StrokeData = {
-      points: [], // Boya kovası için boş points
+      strokeId: newStrokeId,
+      points: [],
       color: fillColor,
       size: 1,
       filled: true,
       tool: 'bucket',
       isBucketFill: true,
       fillPosition: { x: startX, y: startY },
-      imageData: imageData, // Dolgu sonrası durumu kaydet
+      // ImageData'yı burada saklamak yerine, diğer istemcilere fillPosition ve color gönderip
+      // onların da kendi floodFillInternal'larını çalıştırmasını sağlamak daha doğru
+      imageData: undefined,
     };
-
-    const exportableFillData = {
-      tool: 'bucket',
-      color: fillColor,
-      fillPosition: { x: startX, y: startY },
-    };
-    console.log('Yeni Boya Kovası Vuruşu:', exportableFillData);
 
     setAllStrokes((prev) => [...prev, fillStroke]);
+
+    // Diğer istemcilere boya kovası olayını bildir
+    const payload: RealtimePointPayload = {
+      type: 'draw', // Yeni bir tip
+      strokeId: newStrokeId,
+      point: { x: startX, y: startY }, // Bu durumda point aslında fillPosition
+      color: fillColor,
+      size: 1,
+      tool: 'bucket',
+      isBucketFill: true,
+      fillPosition: { x: startX, y: startY },
+    };
+    sendMessage({ type: 'player_move', content: payload });
+    console.log('Boya Kovası Gönderildi:', payload);
   };
-  // Hex renk kodunu RGB'ye çevir
+
   const hexToRgb = (hex: string) => {
     const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
     return result
@@ -545,9 +747,9 @@ const DrawingCanvas: React.FC = () => {
         }
       : null;
   };
-  // Canvas tıklama olayını güncelle
+
   const handleCanvasClick = (event: MouseEvent<HTMLCanvasElement>) => {
-    if (tool === 'bucket') {
+    if (tool === 'bucket' && canDraw) {
       const canvas = canvasRef.current;
       if (!canvas) return;
 
@@ -558,6 +760,9 @@ const DrawingCanvas: React.FC = () => {
       floodFill(x, y, color);
     }
   };
+
+  const canvasCursor = canDraw ? 'crosshair' : 'not-allowed';
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-50 to-blue-50 p-8">
       <div className="max-w-7xl mx-auto">
@@ -753,7 +958,8 @@ const DrawingCanvas: React.FC = () => {
               onMouseUp={stopDrawing}
               onMouseLeave={stopDrawing}
               onMouseMove={draw}
-              className="border-4 border-gray-300 rounded-xl shadow-lg cursor-crosshair"
+              style={{ cursor: canDraw ? canvasCursor : 'not-allowed' }}
+              className="border-4 border-gray-300 rounded-xl shadow-lg"
             />
           </div>
         </div>

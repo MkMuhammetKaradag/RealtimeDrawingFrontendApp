@@ -10,7 +10,7 @@ import {
 import HomePage from '../pages/HomePage/index';
 import AuthPage from '../pages/AuthPage';
 import NotFoundPage from '../pages/NotFoundPage';
-import GamePage from '../pages/GsamePage/GamePage';
+import GamePage from '../pages/GamePage/GamePage';
 
 // Korumalı Yol Bileşeni
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
