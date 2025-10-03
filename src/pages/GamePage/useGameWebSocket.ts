@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 export interface WebSocketMessage {
   type: 'error' | 'room_status' | 'game_state' | string;
   room_id: string;
+  user_id: string;
   content: any;
   // Diğer oyun verileri
 }
