@@ -12,11 +12,16 @@ const GamePage: React.FC = () => {
     'idle'
   );
 
-  const { connectionStatus, errorMessage, roomData, sendMessage } =
-    useGameWebSocket({
-      roomId: room_id || '',
-      sessionToken: document.cookie.split('session=')[1],
-    });
+  const {
+    connectionStatus,
+    errorMessage,
+    roomData,
+    roomDrawData,
+    sendMessage,
+  } = useGameWebSocket({
+    roomId: room_id || '',
+    sessionToken: document.cookie.split('session=')[1],
+  });
 
   const [showJsonInput, setShowJsonInput] = useState(false);
 
@@ -106,6 +111,7 @@ const GamePage: React.FC = () => {
           role={role}
           gameStatus={gameStatus}
           sendMessage={sendMessage}
+          roomDrawData={roomDrawData}
         ></Paint>
 
         <div className="text-center text-gray-600 mt-6">

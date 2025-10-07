@@ -274,6 +274,7 @@ class Shape extends Tool {
     event.preventDefault();
     const mousePos = getMousePos(Tool.ctx.canvas, event);
     this.operateStart(mousePos);
+    this.isDrawing = true;
   }
 
   public onMouseMove(event: MouseEvent): void {
@@ -286,6 +287,7 @@ class Shape extends Tool {
     event.preventDefault();
     const mousePos = getMousePos(Tool.ctx.canvas, event);
     this.operateEnd(mousePos, false);
+    this.isDrawing = false;
   }
 
   // --- Tool Sınıfından Miras Alınan Dokunmatik Olay Yöneticileri ---

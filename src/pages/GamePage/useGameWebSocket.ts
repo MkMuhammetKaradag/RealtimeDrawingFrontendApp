@@ -26,6 +26,7 @@ export const useGameWebSocket = ({
   >('connecting');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [roomData, setRoomData] = useState<WebSocketMessage | null>(null);
+  const [roomDrawData, setRoomDrawData] = useState<any>(null);
 
   useEffect(() => {
     if (!roomId) {
@@ -91,8 +92,16 @@ export const useGameWebSocket = ({
           }
 
           if (message.type === 'canvas_update') {
-            console.log('Canvas güncelleme mesajı alındı');
-            setRoomData({ ...message, content: message.content });
+            const drawDataString = message.content?.data;
+            if (drawDataString) {
+              // BURASI DEĞİŞMELİ: drawDataString'i parse edip doğrudan setRoomDrawData'ya atayın
+              const drawActionContent = JSON.parse(drawDataString);
+              setRoomDrawData({
+                // roomDrawData'yı, Canvas'ın beklediği structure'a uygun hale getiriyoruz
+                type: 'canvas_action', // Bu, Canvas tarafında `roomDrawData.type` olarak erişilecek
+                content: drawActionContent, // Bu da `roomDrawData.content` olarak erişilecek ve içinde function, x, y olacak
+              });
+            }
           } else {
             setRoomData(message);
           }
@@ -152,5 +161,11 @@ export const useGameWebSocket = ({
     }
   };
 
-  return { connectionStatus, errorMessage, roomData, sendMessage };
+  return {
+    connectionStatus,
+    errorMessage,
+    roomData,
+    roomDrawData,
+    sendMessage,
+  };
 };

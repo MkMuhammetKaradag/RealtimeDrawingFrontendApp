@@ -34,14 +34,21 @@ import {
 import Dispatcher from '../../util/dispatcher';
 import Snapshot from '../../util/snapshot';
 import Canvas from '../../components/canvas';
+import type { WebSocketMessage } from '../GamePage/useGameWebSocket';
 
 interface PaintProps {
   role: 'drawer' | 'guesser' | null;
   gameStatus: 'idle' | 'started' | 'ended';
   sendMessage: (data: any) => void;
+  roomDrawData: WebSocketMessage | null;
 }
 
-const Paint: React.FC<PaintProps> = ({ role, gameStatus, sendMessage }) => {
+const Paint: React.FC<PaintProps> = ({
+  role,
+  gameStatus,
+  sendMessage,
+  roomDrawData,
+}) => {
   // Canvas referansı
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -70,7 +77,7 @@ const Paint: React.FC<PaintProps> = ({ role, gameStatus, sendMessage }) => {
 
   // Konsol log fonksiyonu
   const logAction = useCallback((action: string, details?: any) => {
-    // console.log(`🎨 Çizim Eylemi: ${action}`, details ? details : '');
+    console.log(`🎨 Çizim Eylemi: ${action}`, details ? details : '');
   }, []);
 
   // Renk ayarlama fonksiyonu
@@ -157,96 +164,6 @@ const Paint: React.FC<PaintProps> = ({ role, gameStatus, sendMessage }) => {
     [logAction]
   );
 
-  // Çizim başlatma
-  const startDrawing = useCallback(
-    (
-      e:
-        | React.MouseEvent<HTMLCanvasElement>
-        | React.TouchEvent<HTMLCanvasElement>
-    ) => {
-      if (!canDraw) return;
-
-      setIsDrawing(true);
-      logAction('Çizim başlatıldı');
-
-      const canvas = canvasRef.current;
-      if (!canvas) return;
-
-      const ctx = canvas.getContext('2d');
-      if (!ctx) return;
-
-      const rect = canvas.getBoundingClientRect();
-      const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
-      const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
-
-      const x = clientX - rect.left;
-      const y = clientY - rect.top;
-
-      ctx.beginPath();
-      ctx.moveTo(x, y);
-    },
-    [canDraw, logAction]
-  );
-
-  // Çizim durdurma
-  const stopDrawing = useCallback(() => {
-    if (isDrawing) {
-      setIsDrawing(false);
-      logAction('Çizim durduruldu');
-
-      // Çizim bittiğinde snapshot'a kaydet
-      const canvas = canvasRef.current;
-      if (canvas) {
-        const ctx = canvas.getContext('2d');
-        if (ctx) {
-          snapshot.add(ctx.getImageData(0, 0, canvas.width, canvas.height));
-        }
-      }
-    }
-  }, [isDrawing, logAction, snapshot]);
-
-  // Çizim yapma
-  const draw = useCallback(
-    (
-      e:
-        | React.MouseEvent<HTMLCanvasElement>
-        | React.TouchEvent<HTMLCanvasElement>
-    ) => {
-      if (!isDrawing || !canDraw) return;
-
-      const canvas = canvasRef.current;
-      if (!canvas) return;
-
-      const ctx = canvas.getContext('2d');
-      if (!ctx) return;
-
-      const rect = canvas.getBoundingClientRect();
-      const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
-      const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
-
-      const x = clientX - rect.left;
-      const y = clientY - rect.top;
-
-      // Çizim ayarları
-      ctx.lineCap = 'round';
-      ctx.lineJoin = 'round';
-      ctx.strokeStyle = mainColor;
-
-      // Çizgi kalınlığı ayarlama
-      const lineWidths: Record<LineWidthType, number> = {
-        [LineWidthValue.THIN]: 2,
-        [LineWidthValue.MIDDLE]: 4,
-        [LineWidthValue.BOLD]: 8,
-        [LineWidthValue.MAXBOLD]: 12,
-      };
-      ctx.lineWidth = lineWidths[lineWidthType] || 2;
-
-      ctx.lineTo(x, y);
-      ctx.stroke();
-    },
-    [isDrawing, canDraw, mainColor, lineWidthType]
-  );
-
   // Canvas temizleme
   const clearCanvas = useCallback(() => {
     const canvas = canvasRef.current;
@@ -262,6 +179,13 @@ const Paint: React.FC<PaintProps> = ({ role, gameStatus, sendMessage }) => {
     // Snapshot'a ekle
     snapshot.add(ctx.getImageData(0, 0, canvas.width, canvas.height));
     logAction('Canvas temizlendi');
+    sendMessage({
+      type: 'canvas_action',
+
+      content: {
+        type: 'canvas_clear',
+      },
+    });
   }, [snapshot, logAction]);
 
   // Geri alma (Undo)
@@ -277,6 +201,11 @@ const Paint: React.FC<PaintProps> = ({ role, gameStatus, sendMessage }) => {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       ctx.putImageData(imageData, 0, 0);
       logAction('Geri alındı (Undo)');
+      sendMessage({
+        type: 'canvas_action',
+
+        content: { type: 'undo_action', content: null },
+      });
     } else {
       logAction('Geri alınamadı - geçmiş yok');
     }
@@ -295,6 +224,13 @@ const Paint: React.FC<PaintProps> = ({ role, gameStatus, sendMessage }) => {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       ctx.putImageData(imageData, 0, 0);
       logAction('İleri alındı (Redo)');
+      sendMessage({
+        type: 'canvas_action',
+
+        content: {
+          type: 'redo_action',
+        },
+      });
     } else {
       logAction('İleri alınamadı - gelecek yok');
     }
@@ -397,12 +333,14 @@ const Paint: React.FC<PaintProps> = ({ role, gameStatus, sendMessage }) => {
                   swapColors,
                 }}
               >
-                {gameStatus !== 'started' && (
+                {gameStatus === 'started' && (
                   <div className="max-h-screen h-full">
-                    {role !== 'drawer' && <Toolbar />}
+                    {role === 'drawer' && <Toolbar />}
 
                     <Canvas
-                      role={'drawer'}
+                      sendMessage={sendMessage}
+                      roomDrawData={roomDrawData}
+                      role={role}
                       toolType={toolType}
                       shapeType={shapeType}
                       shapeOutlineType={shapeOutlineType}

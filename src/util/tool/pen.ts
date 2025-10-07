@@ -67,6 +67,7 @@ class Pen extends Tool {
         false // Dokunmatik değil
       );
     } else {
+      console.log('11111111111111111111111');
       logDrawStart(
         this.toolType as any,
         pos,
@@ -154,10 +155,20 @@ class Pen extends Tool {
     event.preventDefault();
     const mousePos = getMousePos(Tool.ctx.canvas, event);
     this.operateStart(mousePos);
+    this.isDrawing = true;
+    this.lastX = mousePos.x; // Başlangıç noktasını kaydet
+    this.lastY = mousePos.y; // Başlangıç noktasını kaydet
+  }
+
+  public toolName(): string {
+    return this.toolType;
   }
 
   public onMouseUp(event: MouseEvent): void {
     event.preventDefault();
+    this.isDrawing = false;
+    this.lastX = null; // Çizim bitince sıfırla
+    this.lastY = null; // Çizim bitince sıfırla
     this.operateEnd();
   }
 
@@ -165,6 +176,9 @@ class Pen extends Tool {
     event.preventDefault();
     const mousePos = getMousePos(Tool.ctx.canvas, event);
     this.operateMove(mousePos);
+    Tool.ctx.lineWidth = Tool.baseLineWidth * Tool.lineWidthFactor;
+    this.lastX = mousePos.x;
+    this.lastY = mousePos.y;
   }
 
   // --- Dokunmatik Olay Yöneticileri (Touch Event Handlers) ---
@@ -184,6 +198,7 @@ class Pen extends Tool {
         true // Dokunmatik
       );
     } else {
+      console.log('2222222222222222222222222');
       logDrawStart(
         this.toolType as any,
         touchPos,

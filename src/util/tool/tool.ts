@@ -177,6 +177,11 @@ export default class Tool {
    */
   public static subColor = 'white';
 
+  public isDrawing: boolean = false;
+  public static baseLineWidth: number = 5;
+  public lastX: number | null = null;
+  public lastY: number | null = null;
+
   // Tüm araçların kullanacağı Canvas 2D Context'i. Statik olarak tutulur.
   public static ctx: CanvasRenderingContext2D;
 
@@ -184,6 +189,7 @@ export default class Tool {
 
   public onMouseDown(event: MouseEvent): void {
     // Fare tıklandığında (çizim başlangıcı)
+    this.isDrawing = true;
   }
 
   public onMouseMove(event: MouseEvent): void {
@@ -192,6 +198,7 @@ export default class Tool {
 
   public onMouseUp(event: MouseEvent): void {
     // Fare bırakıldığında (çizim bitişi)
+    this.isDrawing = false;
   }
 
   // --- Dokunmatik Olay Yöneticileri (Alt sınıflar uygular) ---
