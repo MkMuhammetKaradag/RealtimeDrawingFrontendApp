@@ -18,10 +18,18 @@ export const getMousePos = (
 ): Point => {
   // Canvas'ın tarayıcı penceresine göre konumunu alır (sol üst köşe)
   const rect = canvas.getBoundingClientRect();
+
+  // Cihaz Piksel Oranını (DPI) al
+  const dpr = window.devicePixelRatio || 1;
+
+  // Canvas üzerindeki göreceli konumu hesapla (clientX/Y - rect.left/top)
+  const rawX = event.clientX - rect.left;
+  const rawY = event.clientY - rect.top;
   return {
     // Fare konumu (clientX/Y) ile Canvas'ın sol/üst konum farkı alınarak göreceli konum bulunur.
-    x: event.clientX - rect.left,
-    y: event.clientY - rect.top,
+
+    x: rawX / dpr,
+    y: rawY / dpr,
   };
 };
 
@@ -35,11 +43,17 @@ export const getTouchPos = (
   canvas: HTMLCanvasElement,
   event: TouchEvent
 ): Point => {
-  // NOT: getBoundingClientRect() kullanmak genellikle offsetLeft/Top kullanmaktan daha modern ve güvenlidir.
+  const rect = canvas.getBoundingClientRect();
+  const dpr = window.devicePixelRatio || 1;
+
+  // touches[0] ile Canvas'ın konum farkını al
+  const rawX = event.touches[0].clientX - rect.left;
+  const rawY = event.touches[0].clientY - rect.top;
+
   return {
-    // İlk dokunma noktasının (touches[0]) sayfa konumu ile Canvas'ın ofset konumu arasındaki farkı alır.
-    x: event.touches[0].pageX - canvas.offsetLeft,
-    y: event.touches[0].pageY - canvas.offsetTop,
+    // KRİTİK DÜZENLEME: Koordinatları DPI oranına bölerek çizim context'ine uygun hale getir.
+    x: rawX / dpr,
+    y: rawY / dpr,
   };
 };
 

@@ -65,10 +65,9 @@ const shapes: { type: ShapeToolType; icon: JSX.Element; title: string }[] = [
 
 interface ShapePanelProps {
   className?: string;
-  // Yeni eklenen prop'lar
   isOpen: boolean;
   onClose: () => void;
-  panelRef: React.RefObject<HTMLDivElement | null>; // Dış tıklamayı algılamak için ref
+  panelRef: React.RefObject<HTMLDivElement | null>;
 }
 
 const ShapePanel: FC<ShapePanelProps> = ({
@@ -85,65 +84,77 @@ const ShapePanel: FC<ShapePanelProps> = ({
     shapeOutlineContext.setType(event.target.value as ShapeOutlineType);
   };
 
-  // Shape aracı seçiliyse panelin içindeki elemanları etkinleştir
   const isShapeToolSelected = toolTypeContex.type === ToolValue.SHAPE;
 
-  // Panelin görünürlüğünü isOpen prop'una göre yönet
-  const panelClasses = `${className} absolute z-10 p-2 w-40 flex flex-col items-center bg-white shadow-lg rounded-lg border border-gray-200 
-    ${isOpen ? 'block' : 'hidden'}`; // isOpen false ise gizle
+  // ----------------------------------------------------------------------
+  // KRİTİK DÜZENLEME 1: KONUMLANDIRMA VE GÖRÜNÜRLÜK YÖNETİMİ
+  // ----------------------------------------------------------------------
+
+  // `className` prop'u zaten konumlandırmayı içerdiği için,
+  // bu bileşendeki mutlak konumlandırma sınıflarını (absolute top-full left-0 mt-2) kaldırıyoruz
+  // ve sadece görünürlük ile temel stilleri koruyoruz.
+
+  const panelClasses = `${className} z-10 p-3 w-44 flex flex-col items-center bg-white shadow-xl rounded-lg border border-gray-200 
+    transition-opacity duration-200 ease-in-out ${
+      isOpen ? 'opacity-100 block' : 'opacity-0 hidden'
+    }`; // Gizleme/Gösterme için geçiş eklendi
 
   return (
     <div ref={panelRef} className={panelClasses}>
-      <div className="shape-container w-full mb-2">
-        <div className="shape-content grid grid-cols-4 gap-1 p-1">
+      {/* BAŞLIK EKLENDİ (Daha okunaklı olması için) */}
+      <h3 className="text-sm font-bold text-gray-800 mb-2 w-full text-left">
+        Şekiller
+      </h3>
+
+      <div className="shape-container w-full">
+        <div className="shape-content grid grid-cols-4 gap-2 p-1 border border-gray-300 rounded-lg bg-gray-50">
           {shapes.map((shape) => {
             const isSelected =
               shapeTypeContext.type === shape.type && isShapeToolSelected;
             const itemClasses = isSelected
-              ? 'bg-blue-300 border-blue-700 text-blue-900'
-              : 'text-gray-600 hover:bg-gray-200 hover:border-gray-400';
+              ? 'bg-blue-500 border-blue-700 text-white shadow-md'
+              : 'text-gray-700 hover:bg-gray-200 hover:border-gray-400 bg-white';
 
             return (
-              <div
+              <button
                 key={shape.type}
                 title={shape.title}
-                className={`shape-item flex justify-center items-center w-8 h-8 p-1 cursor-pointer border border-transparent rounded-md transition-all ${itemClasses}`}
+                type="button"
+                className={`flex justify-center items-center w-8 h-8 p-1 cursor-pointer border border-transparent rounded-md transition-all ${itemClasses}`}
                 onClick={() => {
                   shapeTypeContext.setType(shape.type);
                   toolTypeContex.setType(ToolValue.SHAPE);
-                  onClose(); // Şekil seçildiğinde paneli kapat
+                  // onClose();
                 }}
               >
                 {shape.icon}
-              </div>
+              </button>
             );
           })}
         </div>
-        <div className="shape-style mt-2 flex flex-col items-start px-1">
+
+        {/* Çizgi Stili Seçici */}
+        <div className="shape-style mt-3 pt-2 border-t border-gray-200 flex flex-col items-start px-1">
           <label
             htmlFor="shape-outline-select"
-            className="font-semibold text-gray-700 mb-1 text-xs"
+            className="font-medium text-gray-700 mb-1 text-xs"
           >
-            Outline
+            Çizgi Stili
           </label>
           <select
             id="shape-outline-select"
-            className={`w-full bg-white border border-gray-300 rounded py-1 px-2 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-700 ${
+            className={`w-full bg-white border border-gray-300 rounded py-1 px-2 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm text-gray-700 ${
               !isShapeToolSelected ? 'opacity-50 cursor-not-allowed' : ''
             }`}
             value={shapeOutlineContext.type}
             onChange={handleOutlineChange}
             disabled={!isShapeToolSelected}
           >
-            <option value={ShapeOutlineValue.SOLID}>Solid Line</option>
-            <option value={ShapeOutlineValue.DOTTED}>Dotted Line</option>
+            <option value={ShapeOutlineValue.SOLID}>Düz Çizgi</option>
+            <option value={ShapeOutlineValue.DOTTED}>Noktalı Çizgi</option>
           </select>
         </div>
       </div>
-      {/* "Shapes" metnini kaldırabiliriz, çünkü artık bir butonla açılıyor */}
-      {/* <div className="absolute bottom-0 w-full text-center text-xs font-semibold text-gray-600 pt-1">
-        Shapes
-      </div> */}
     </div>
   );
 };

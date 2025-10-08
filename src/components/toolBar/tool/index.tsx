@@ -7,10 +7,7 @@ import { FaEraser } from 'react-icons/fa'; // Silgi
 import { MdColorize } from 'react-icons/md'; // Renk Seçici (Damlalık)
 
 import { ToolValue, type ToolType } from '../../../util/toolType';
-import { ToolTypeContext } from '../../../context'; // Context'i hook ile kullanacağız
-
-// Tailwind sınıfları kullanıldığından, ayrı bir CSS/Less dosyasına gerek kalmaz.
-// import './index.less';
+import { ToolTypeContext } from '../../../context';
 
 // TypeScript Arayüzü
 export interface ToolPanelProps {
@@ -39,18 +36,18 @@ const ToolItem: FC<ToolItemProps> = ({
 
   // Tailwind sınıfları:
   const baseClasses =
-    'flex justify-center items-center w-8 h-8 cursor-pointer p-1 border border-transparent rounded-sm transition-all text-xl';
-  const hoverClasses = 'hover:border-blue-500 hover:bg-blue-100';
+    'flex justify-center items-center w-8 h-8 cursor-pointer p-1 border border-transparent rounded-md transition-all text-xl shadow-sm';
+  const hoverClasses = 'hover:border-indigo-500 hover:bg-indigo-100';
   const selectedClasses = isSelected
-    ? 'bg-blue-200 border-blue-600 text-blue-800'
-    : 'text-gray-700';
+    ? 'bg-indigo-200 border-indigo-600 text-indigo-800 shadow-lg'
+    : 'text-gray-700 bg-white';
 
   return (
-    <span title={title} onClick={() => onClick(toolType)}>
+    <button title={title} onClick={() => onClick(toolType)} type="button">
       <div className={`${baseClasses} ${hoverClasses} ${selectedClasses}`}>
         {icon}
       </div>
-    </span>
+    </button>
   );
 };
 
@@ -59,62 +56,80 @@ const ToolItem: FC<ToolItemProps> = ({
 const ToolPanel: FC<ToolPanelProps> = (props): JSX.Element => {
   const { className } = props;
 
-  // useContext Hook'unu kullanarak Context değerlerine erişim
   const toolContext = useContext(ToolTypeContext);
   const { type, setType } = toolContext;
 
+  // ----------------------------------------------------------------------
+  // KRİTİK DEĞİŞİKLİK: MASAÜSTÜNDE ÇOKLU SÜTUN (FLEX-WRAP İLE)
+  // ----------------------------------------------------------------------
+
   return (
-    // 'toolpanel' div'ini Tailwind sınıflarıyla yeniden tanımlıyoruz
+    // Mobil (Varsayılan): Yatay akış (Toolbar'a uyar), öğeler yan yana.
+    // Masaüstü (md:): Dikey değil, satırları saran yatay akış (flex-row flex-wrap).
     <div
-      className={`${className} relative p-2 pt-0 w-24 flex flex-col items-center`}
+      className={`${className} w-full flex flex-row flex-wrap items-center justify-center space-x-2 md:space-x-1 md:space-y-1 p-0`}
     >
-      {/* Üst Grup (Top) - Kalem, Silgi, Doldurma */}
-      <div className="flex justify-between w-full mb-2">
-        {/* Kalem (Pencil) */}
-        <ToolItem
-          title="Kalem"
-          icon={<IoMdCreate />}
-          toolType={ToolValue.PEN}
-          currentType={type}
-          onClick={setType}
-        />
+      {/*
+        Masaüstü Modunda:
+        - `flex-row` ve `flex-wrap` sayesinde butonlar yan yana sıralanır ve
+          sığmadığında alt satıra geçer.
+        - `md:w-1/2` (opsiyonel) ile her öğenin genişliğini ayarlayarak
+          iki sütunlu bir düzeni zorlayabiliriz, ancak bu örnekte sadece
+          `flex-wrap` yeterli olacaktır.
+        - Daha temiz bir grid görünümü için `md:gap-1` kullanıldı.
+      */}
 
-        {/* Silgi (Eraser) */}
-        <ToolItem
-          title="Silgi"
-          icon={<FaEraser />}
-          toolType={ToolValue.ERASER}
-          currentType={type}
-          onClick={setType}
-        />
+      {/* Kalem (Pencil) */}
+      <ToolItem
+        title="Kalem"
+        icon={<IoMdCreate />}
+        toolType={ToolValue.PEN}
+        currentType={type}
+        onClick={setType}
+      />
 
-        {/* Renk Doldurma (Fill) */}
-        <ToolItem
-          title="Renk Doldur"
-          icon={<MdFormatColorFill />}
-          toolType={ToolValue.COLOR_FILL}
-          currentType={type}
-          onClick={setType}
-        />
-      </div>
+      {/* Silgi (Eraser) */}
+      <ToolItem
+        title="Silgi"
+        icon={<FaEraser />}
+        toolType={ToolValue.ERASER}
+        currentType={type}
+        onClick={setType}
+      />
 
-      {/* Alt Grup (Down) - Renk Seçici */}
-      <div className="flex justify-start w-full">
-        {/* Renk Seçici (Color Extractor) */}
-        <ToolItem
-          title="Renk Seçici (Damlalık)"
-          icon={<MdColorize />}
-          toolType={ToolValue.COLOR_EXTRACT}
-          currentType={type}
-          onClick={setType}
-        />
-      </div>
+      {/* Renk Doldurma (Fill) */}
+      <ToolItem
+        title="Renk Doldur"
+        icon={<MdFormatColorFill />}
+        toolType={ToolValue.COLOR_FILL}
+        currentType={type}
+        onClick={setType}
+      />
 
-      {/* Panel Başlığı (Title) */}
-      {/* Absolute konumlandırma ile altta ortalanmış başlık */}
-      <div className="absolute bottom-0 w-full text-center text-xs font-semibold text-gray-600 pt-1">
-        Araçlar
-      </div>
+      {/* Renk Seçici (Color Extractor) */}
+      <ToolItem
+        title="Renk Seçici (Damlalık)"
+        icon={<MdColorize />}
+        toolType={ToolValue.COLOR_EXTRACT}
+        currentType={type}
+        onClick={setType}
+      />
+
+      {/* Örnek olarak ek araçlar ekleyelim (Düzeni görmek için) */}
+      {/* <ToolItem
+        title="Metin Ekle"
+        icon={<IoMdCreate />} // İkonu placeholder olarak kullandık
+        toolType={ToolValue.TEXT as ToolType}
+        currentType={type}
+        onClick={setType}
+      />
+      <ToolItem
+        title="Büyüteç"
+        icon={<MdColorize />} // İkonu placeholder olarak kullandık
+        toolType={ToolValue.MAGNIFYING as ToolType}
+        currentType={type}
+        onClick={setType}
+      /> */}
     </div>
   );
 };

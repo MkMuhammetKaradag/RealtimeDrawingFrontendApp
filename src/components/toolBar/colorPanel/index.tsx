@@ -49,8 +49,25 @@ const initialColorResult: ColorResult = {
   hsl: { h: 0, s: 0, l: 0, a: 1 },
 };
 
+// Ekran boyutunu kontrol eden basit bir hook ekleyelim
+const useIsDesktop = (breakpoint = 768) => {
+  const [isDesktop, setIsDesktop] = useState(window.innerWidth >= breakpoint);
+
+  useEffect(() => {
+    const handleResize = () => {
+      setIsDesktop(window.innerWidth >= breakpoint);
+    };
+
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [breakpoint]);
+
+  return isDesktop;
+};
+
 const ColorPanel: FC<ColorPanelProps> = (props): JSX.Element => {
   const { className } = props;
+  const isDesktop = useIsDesktop(); // Yeni hook'u kullan
 
   const colorContext = useContext(ColorContext);
   const activeColorType: ColorType = colorContext.activeColor;
@@ -114,19 +131,32 @@ const ColorPanel: FC<ColorPanelProps> = (props): JSX.Element => {
     setIsPickerOpen(true);
   };
 
-  // Swap colors fonksiyonu - Context'ten kullan
   const swapColors = () => {
     if (colorContext.swapColors) {
       colorContext.swapColors();
     }
   };
 
-  const panelClasses = `${className} relative p-3 w-auto flex items-start gap-3`;
+  // ----------------------------------------------------------------------
+  // KRİTİK DÜZENLEME: MOBİL İÇİN RENK SAYISI VE SÜTUN AYARI
+  // ----------------------------------------------------------------------
+
+  // Mobil: İlk 10 rengi (2 sıra) göster, Masaüstü: Tüm renkleri göster
+  const visibleColors = isDesktop ? colors : colors.slice(0, 10);
+
+  // Sütun Sayısı: Mobil 4, Masaüstü 7 (Daha az sıkışıklık için)
+  const gridColsClasses = isDesktop ? 'grid-cols-6' : 'grid-cols-4';
+
+  const panelClasses = `${className} relative w-full flex flex-row md:flex-col items-start md:items-center gap-3 p-1 md:p-0`;
+
+  const colorCardsClasses = 'flex items-center gap-3 md:mb-2 md:gap-3';
+
+  const colorToolsClasses = 'flex flex-col gap-3 w-auto md:w-full';
 
   return (
     <div className={panelClasses}>
-      {/* Sol Taraf: Renk Seçim Kartları */}
-      <div className="flex  items-center gap-2">
+      {/* Sol Taraf (Mobil) / Üst Taraf (Masaüstü): Renk Seçim Kartları */}
+      <div className={colorCardsClasses}>
         {/* Ana Renk */}
         <button
           onClick={() => colorContext.setActiveColor(ColorValue.MAIN)}
@@ -181,16 +211,18 @@ const ColorPanel: FC<ColorPanelProps> = (props): JSX.Element => {
         </button>
       </div>
 
-      {/* Sağ Taraf: Palet ve Özel Renk Seçici */}
-      <div className="flex flex-col gap-3">
+      {/* Sağ Taraf (Mobil) / Alt Taraf (Masaüstü): Palet ve Özel Renk Seçici */}
+      <div className={colorToolsClasses}>
         {/* Ön Tanımlı Renk Paleti */}
-        <div className="grid grid-cols-10 gap-1">
-          {colors.map((color) => (
+        {/* Sütun sayısı ve renk sayısı artık koşullu */}
+        <div className={`grid ${gridColsClasses} gap-2`}>
+          {visibleColors.map((color) => (
             <button
               onClick={() => colorContext.setColor('#' + color.value)}
               key={color.value}
               title={color.title}
-              className="w-4 h-4 rounded border border-gray-300 hover:border-gray-500 hover:scale-110 active:scale-95 transition-all duration-150 shadow-sm hover:shadow-md"
+              // Mobil/Masaüstü boyutları korunmuştur
+              className="w-5 h-5  md:w-6 md:h-6 rounded border border-gray-300 hover:border-gray-500 hover:scale-110 active:scale-95 transition-all duration-150 shadow-sm hover:shadow-md"
               style={{ backgroundColor: '#' + color.value.substring(0, 6) }}
             />
           ))}
@@ -217,15 +249,9 @@ const ColorPanel: FC<ColorPanelProps> = (props): JSX.Element => {
           <SketchPicker
             color={pickerColor.rgb}
             onChange={handleCompleteChange}
-            // onChangeComplete={handleCompleteChange}
           />
         </div>
       </CustomPopover>
-
-      {/* Panel Başlığı */}
-      <div className="absolute bottom-0 left-0 right-0 text-center text-xs font-semibold text-gray-600 pt-1">
-        Renkler
-      </div>
     </div>
   );
 };

@@ -35,6 +35,11 @@ import Dispatcher from '../../util/dispatcher';
 import Snapshot from '../../util/snapshot';
 import Canvas from '../../components/canvas';
 import type { WebSocketMessage } from '../GamePage/useGameWebSocket';
+import {
+  CLEAR_EVENT,
+  REDO_EVENT,
+  UNDO_EVENT,
+} from '../../util/dispatcher/event';
 
 interface PaintProps {
   role: 'drawer' | 'guesser' | null;
@@ -169,123 +174,60 @@ const Paint: React.FC<PaintProps> = ({
     const canvas = canvasRef.current;
     if (!canvas) return;
 
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.fillStyle = 'white';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-    // Snapshot'a ekle
-    snapshot.add(ctx.getImageData(0, 0, canvas.width, canvas.height));
+    // Dispatcher'a olay göndermek için bu kod yerine, Canvas.tsx içindeki Dispatcher
+    // olayı tetiklenmelidir. Ancak burada yerel temizlik yapmak istiyorsak bu kalabilir.
+    // WebSocket mesajı göndermek için:
+    dispatcher.dispatch(CLEAR_EVENT);
     logAction('Canvas temizlendi');
-    sendMessage({
-      type: 'canvas_action',
-
-      content: {
-        type: 'canvas_clear',
-      },
-    });
-  }, [snapshot, logAction]);
+  }, [logAction, dispatcher]); // Snapshot'a ekleme Canvas.tsx'e taşındı.
 
   // Geri alma (Undo)
   const undo = useCallback(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    const imageData = snapshot.back();
-    if (imageData) {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      ctx.putImageData(imageData, 0, 0);
-      logAction('Geri alındı (Undo)');
-      sendMessage({
-        type: 'canvas_action',
-
-        content: { type: 'undo_action', content: null },
-      });
-    } else {
-      logAction('Geri alınamadı - geçmiş yok');
-    }
-  }, [snapshot, logAction]);
+    // Canvas.tsx'e WebSocket mesajı gönderme görevi Canvas'tan yönetildi.
+    // Biz burada sadece Dispatcher'ı tetikliyoruz.
+    dispatcher.dispatch(UNDO_EVENT);
+    logAction('Geri alındı (Undo)');
+  }, [logAction, dispatcher]); // Snapshot kullanmak yerine dispatcher kullanıldı.
 
   // İleri alma (Redo)
   const redo = useCallback(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
+    // Canvas.tsx'e WebSocket mesajı gönderme görevi Canvas'tan yönetildi.
+    // Biz burada sadece Dispatcher'ı tetikliyoruz.
+    dispatcher.dispatch(REDO_EVENT);
+    logAction('İleri alındı (Redo)');
+  }, [logAction, dispatcher]); // Snapshot kullanmak yerine dispatcher kullanıldı.
 
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    const imageData = snapshot.forward();
-    if (imageData) {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      ctx.putImageData(imageData, 0, 0);
-      logAction('İleri alındı (Redo)');
-      sendMessage({
-        type: 'canvas_action',
-
-        content: {
-          type: 'redo_action',
-        },
-      });
-    } else {
-      logAction('İleri alınamadı - gelecek yok');
-    }
-  }, [snapshot, logAction]);
-
-  // Canvas cursor ayarlama
-  const getCanvasCursor = useCallback(() => {
-    const cursors: Record<ToolType, string> = {
-      [ToolValue.PEN]: 'crosshair',
-      [ToolValue.ERASER]: 'grab',
-      [ToolValue.COLOR_EXTRACT]: 'crosshair',
-      [ToolValue.COLOR_FILL]: 'crosshair',
-      [ToolValue.SHAPE]: 'crosshair',
-      [ToolValue.TEXT]: 'text',
-      [ToolValue.MAGNIFYING]: 'zoom-in',
-    };
-    return cursors[toolType] || 'crosshair';
-  }, [toolType]);
+  // Canvas cursor ayarlama (Gerekli değil, Canvas.tsx içinde yönetiliyor)
+  // const getCanvasCursor = useCallback(() => { ... }, [toolType]);
 
   // Canvas başlatma ve klavye kısayolları
   useEffect(() => {
-    const canvas = canvasRef.current;
-    if (canvas) {
-      // Canvas boyutlarını ayarla
-      canvas.width = 800;
-      canvas.height = 500;
+    // Canvas.tsx'te boyut ve ilk arka plan zaten sabit 800x500 olarak ayarlandığı için
+    // buradaki boyut ayarlama ve ilk snapshot kodu kaldırılabilir/yoruma alınabilir.
+    // Ancak Canvas.tsx'teki useEffect içinde `canvasRef` kullanılmadığı için
+    // bu CanvasRef'in burada kalması bir problem teşkil etmez.
 
-      // Beyaz arka plan
-      const ctx = canvas.getContext('2d');
-      if (ctx) {
-        ctx.fillStyle = 'white';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        snapshot.add(ctx.getImageData(0, 0, canvas.width, canvas.height));
-      }
-    }
-
-    // Klavye kısayolları
+    // Klavye kısayolları (Dispatcher'ı tetiklemesi için güncellendi)
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (role !== 'drawer') return; // Sadece çizen çizebilir/undo/redo yapabilir
+
       if (e.ctrlKey || e.metaKey) {
         switch (e.key.toLowerCase()) {
           case 'z':
             e.preventDefault();
             if (e.shiftKey) {
-              redo();
+              dispatcher.dispatch(REDO_EVENT);
             } else {
-              undo();
+              dispatcher.dispatch(UNDO_EVENT);
             }
             break;
           case 'y':
             e.preventDefault();
-            redo();
+            dispatcher.dispatch(REDO_EVENT);
             break;
           case 'a':
             e.preventDefault();
-            clearCanvas();
+            dispatcher.dispatch(CLEAR_EVENT);
             break;
         }
       }
@@ -304,7 +246,7 @@ const Paint: React.FC<PaintProps> = ({
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [snapshot, logAction, undo, redo, clearCanvas]);
+  }, [logAction, dispatcher, role]); // Bağımlılıklar güncellendi
 
   return (
     <ToolTypeContext.Provider
@@ -333,22 +275,41 @@ const Paint: React.FC<PaintProps> = ({
                   swapColors,
                 }}
               >
+                {/* OYUN BAŞLADIĞINDA ÇİZİM ALANINI GÖSTER */}
                 {gameStatus === 'started' && (
-                  <div className="max-h-screen h-full">
-                    {role === 'drawer' && <Toolbar />}
+                  // 💡 KRİTİK DÜZENLEME: RESPONSIVE ÇERÇEVE
+                  // Mobil: flex-col-reverse (Toolbar alta) | Masaüstü (md:): flex-row (Toolbar sola)
 
-                    <Canvas
-                      sendMessage={sendMessage}
-                      roomDrawData={roomDrawData}
-                      role={role}
-                      toolType={toolType}
-                      shapeType={shapeType}
-                      shapeOutlineType={shapeOutlineType}
-                      mainColor={mainColor}
-                      subColor={subColor}
-                      lineWidthType={lineWidthType}
-                      setColor={setColor}
-                    />
+                  <div className="flex  md:flex-row w-full max-w-full h-full min-h-[50vh] md:min-h-[70vh] bg-gray-50 rounded-lg shadow-xl">
+                    {/* 1. TOOLBAR ALANI (SADECE DRAWER İÇİN) */}
+                    {role === 'drawer' && (
+                      // Masaüstü: Sabit genişlik (max-w-xs), Kalın gölge
+                      // Mobil: Tam genişlik, Yatay kaydırma
+                      <div className="w-full  md:w-auto md:max-w-[200px] flex-shrink-0 bg-gray-100 md:bg-white border-t md:border-t-0 md:border-r border-gray-200 shadow-lg md:shadow-xl p-2 md:p-4 transition-all duration-300">
+                        {/* Toolbar'ın kendisi dikey/yatay düzeni yönetmeli */}
+                        <Toolbar />
+                      </div>
+                    )}
+
+                    {/* 2. CANVAS ALANI */}
+                    {/* flex-grow: Kalan tüm alanı kaplar */}
+                    <div className="flex-grow flex items-center bg-red-200 justify-center overflow-auto">
+                      {/* KRİTİK DÜZENLEME: max-w-4xl ve max-h-4xl sınırlamaları kaldırıldı. */}{' '}
+                      <div className="w-full h-full bg-yellow-100 flex items-center justify-center">
+                        <Canvas
+                          sendMessage={sendMessage}
+                          roomDrawData={roomDrawData}
+                          role={role}
+                          toolType={toolType}
+                          shapeType={shapeType}
+                          shapeOutlineType={shapeOutlineType}
+                          mainColor={mainColor}
+                          subColor={subColor}
+                          lineWidthType={lineWidthType}
+                          setColor={setColor}
+                        />
+                      </div>
+                    </div>
                   </div>
                 )}
               </ColorContext.Provider>

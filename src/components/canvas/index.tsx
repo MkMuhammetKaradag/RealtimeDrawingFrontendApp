@@ -141,21 +141,34 @@ const Canvas: FC<CanvasProps> = (props) => {
     const canvas = canvasRef.current;
     if (canvas) {
       // Canvas elementinin boyutlarını CSS boyutlarına göre ayarlar (çözünürlük)
-      canvas.height = canvas.clientHeight;
-      canvas.width = canvas.clientWidth;
+      const ctx = canvas.getContext('2d') as CanvasRenderingContext2D;
 
-      // 2D çizim bağlamını (context) Tool sınıfına global olarak atar.
-      Tool.ctx = canvas.getContext('2d') as CanvasRenderingContext2D;
+      // Cihazın Piksel Oranını Al
+      const dpr = window.devicePixelRatio || 1;
 
-      // Canvas'ı ilk başta beyaz ile doldurur (Renk çıkarmanın doğru çalışması için gereklidir).
-      const ctx = canvas.getContext('2d');
-      if (ctx) {
-        ctx.fillStyle = 'white';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
+      // Canvas'ın görünen (CSS) boyutlarını sakla
+      const rect = canvas.getBoundingClientRect();
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      // Canvas'ın iç (piksel) çözünürlüğünü, CSS boyutlarının DPI katı olarak ayarla
+      canvas.width = rect.width * dpr;
+      canvas.height = rect.height * dpr;
 
-        // Başlangıç durumunu Snapshot'a kaydeder (Undo için ilk durum).
-        snapshot.add(ctx.getImageData(0, 0, canvas.width, canvas.height));
-      }
+      // Canvas'ın çizim bağlamını (context) DPI oranında ölçeklendir.
+      // Bu, tüm çizim işlemlerinin (mouse koordinatları, çizgi kalınlıkları) DPI'a uygun olmasını sağlar.
+      ctx.scale(dpr, dpr);
+
+      // --- Devam eden Canvas Kurulumu ---
+
+      // Context'i Tool sınıfına atama (Ölçeklenmiş Context'i kullanmalı)
+      Tool.ctx = ctx;
+
+      // Canvas'ı beyaz ile doldur (Artık rect.width ve rect.height kullanıyoruz)
+      ctx.fillStyle = 'white';
+      // fillRect, zaten ölçeklenmiş olduğu için CSS boyutlarını kullanır:
+      ctx.fillRect(0, 0, rect.width, rect.height);
+
+      // Başlangıç durumunu kaydederken piksel boyutlarını kullan
+      snapshot.add(ctx.getImageData(0, 0, canvas.width, canvas.height));
 
       // --- Dispatcher Olay Kayıtları ---
       const dispatcher = dispatcherContext.dispatcher;
@@ -223,7 +236,7 @@ const Canvas: FC<CanvasProps> = (props) => {
       dispatcher.on(UNDO_EVENT, back);
       // --- End Dispatcher Olay Kayıtları ---
 
-      // Pencere boyutu değiştiğinde Canvas'ı yeniden boyutlandırır.
+      // // Pencere boyutu değiştiğinde Canvas'ı yeniden boyutlandırır.
       // window.addEventListener('resize', () => {
       //   // Mevcut çizimi kaydeder.
       //   const canvasData = Tool.ctx.getImageData(
@@ -255,7 +268,7 @@ const Canvas: FC<CanvasProps> = (props) => {
         // Diğer dispatcher.off ve window.removeEventListener'lar da buraya eklenmeli
       };
     }
-  }, [canvasRef]); // canvasRef ilk yüklendiğinde bir kere çalışır.
+  }, [canvasRef, role]); // canvasRef ilk yüklendiğinde bir kere çalışır.
 
   useEffect(() => {
     if (!roomDrawData || !Tool.ctx || role === 'drawer') {
@@ -458,17 +471,33 @@ const Canvas: FC<CanvasProps> = (props) => {
 
   // Fare tıklandığında (çizime başlama)
   const onMouseDown = (event: MouseEvent) => {
-    if (role === 'drawer' && tool) {
+    const canvas = canvasRef.current;
+    if (role === 'drawer' && tool && canvas) {
       const colorToSend = toolType === ToolValue.ERASER ? subColor : mainColor;
+      const rect = canvas.getBoundingClientRect();
+
+      // Canvas'a göre fare pozisyonunu hesapla
+      const x = event.clientX - rect.left;
+      const y = event.clientY - rect.top;
+
+      // Koordinatları DPI'a bölerek normalize et (ölçeklenmiş Context için)
+      const dpr = window.devicePixelRatio || 1;
+
+      // DPI'a göre normalize edilmiş koordinatlar
+      const normalizedX = x / dpr; // (getMousePos'tan gelen veya hesaplanan)
+      const normalizedY = y / dpr; // (getMousePos'tan gelen veya hesaplanan)
 
       tool.onMouseDown(event);
+      // tool.onMouseDown(event);
       props.sendMessage({
         type: 'canvas_action',
         content: {
           type: 'canvas_action',
           function: 'draw_start', // İşlem tipi "draw_start" olarak güncellendi
-          x: event.offsetX,
-          y: event.offsetY,
+          // x: event.offsetX,
+          // y: event.offsetY,
+          x: normalizedX, // Normalize edilmiş X
+          y: normalizedY, // Normalize edilmiş Y
           toolType: props.toolType,
           color: colorToSend,
           shapeType:
@@ -605,7 +634,9 @@ const Canvas: FC<CanvasProps> = (props) => {
       // w-full: Tam genişlik kaplar.
       // role !== 'drawer' ise, 'pointer-events-none' sınıfı eklenir.
       // Bu, tahmin edenlerin (guesser) veya rolü atanmamış kullanıcıların canvas'a tıklamasını ve çizim yapmasını engeller.
-      className={`w-full ${role !== 'drawer' ? 'pointer-events-none' : ''}`}
+      className={`w-full h-full ${
+        role !== 'drawer' ? 'pointer-events-none' : ''
+      }`}
       ref={canvasRef}
     />
   );

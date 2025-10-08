@@ -4,7 +4,6 @@ import React, { useState, useContext, type FC, type JSX } from 'react';
 import { BsDashLg } from 'react-icons/bs'; // Kalınlığı temsil etmek için genel bir çizgi ikonu
 import { IoMdArrowDropdown } from 'react-icons/io'; // Popover açılır menü ikonu
 
-
 import type { LineWidthType } from '../../../util/toolType';
 import { LineWidthValue } from '../../../util/toolType';
 import { LineWidthContext } from '../../../context';
@@ -27,7 +26,7 @@ const thicks: {
   {
     type: LineWidthValue.THIN,
     title: 'İnce (1px)',
-    size: 'text-lg', // Hafifçe büyük çizgi
+    size: 'text-lg',
     stroke: '1px',
   },
   {
@@ -89,14 +88,21 @@ const ThickSelector: FC<ThickSelectorProps> = (props): JSX.Element => {
   const currentThick =
     thicks.find((t) => t.type === lineWidthContext.type) || thicks[0];
 
+  // ----------------------------------------------------------------------
+  // KRİTİK DÜZENLEME: RESPONSIVE ANA KONTEYNER VE BAŞLIK KALDIRMA
+  // ----------------------------------------------------------------------
+
   return (
     // Ana Kapsayıcı: thickselector
+    // W-full ile tam genişlik kullanır, dikey/yatay akışa uyum sağlar.
+    // Başlık kaldırıldığı için 'pt-0' gereksiz hale geldi, p-0 yeterli.
     <div
-      className={`${className} relative p-2 pt-0 w-20 flex flex-col items-center`}
+      className={`${className} relative w-full flex items-center justify-center p-0`}
     >
       {/* Ana Buton: thickline */}
-      <div
-        className="relative w-full h-8 flex items-center justify-center cursor-pointer border border-transparent rounded-sm hover:bg-gray-100 hover:border-gray-300 transition-all"
+      <button
+        type="button" // Erişilebilirlik için
+        className="relative w-full h-10 flex items-center justify-center cursor-pointer border border-transparent rounded-lg hover:bg-gray-100 hover:border-gray-300 transition-all focus:outline-none focus:ring-2 focus:ring-blue-500"
         onClick={onOpen}
         title={`Çizgi Kalınlığı: ${currentThick.title}`}
       >
@@ -108,25 +114,26 @@ const ThickSelector: FC<ThickSelectorProps> = (props): JSX.Element => {
         />
 
         {/* Açılır Menü İkonu */}
-        <IoMdArrowDropdown className="absolute right-1 bottom-1 text-gray-500 text-base" />
-      </div>
+        <IoMdArrowDropdown className="absolute right-1 text-gray-500 text-xl" />
+      </button>
 
       {/* Custom Popover Menüsü */}
       <CustomPopover open={open} onClose={onClose} anchorEl={anchorEle}>
-        <div className="flex flex-col p-1 space-y-1 bg-white shadow-lg rounded ring-1 ring-black ring-opacity-5">
+        <div className="flex flex-col p-2 space-y-1 bg-white shadow-xl rounded-lg ring-1 ring-black ring-opacity-5">
           {thicks.map((thick) => {
             const isSelected = thick.type === lineWidthContext.type;
 
             // Popover içindeki thick-item görünümü
             const itemClasses = isSelected
-              ? 'bg-blue-100 border-blue-500' // Seçili stil
-              : 'hover:bg-gray-100 border-transparent'; // Normal stil
+              ? 'bg-indigo-100 border-indigo-500 text-indigo-700' // Seçili stil
+              : 'hover:bg-gray-100 border-gray-100 text-gray-700'; // Normal stil
 
             return (
-              <div
+              <button
                 key={thick.title}
                 title={thick.title}
-                className={`w-16 h-8 flex items-center justify-center p-1 rounded border cursor-pointer transition-colors ${itemClasses}`}
+                type="button"
+                className={`w-20 h-8 flex items-center justify-center p-1 rounded-md border cursor-pointer transition-colors ${itemClasses}`}
                 onClick={() => {
                   lineWidthContext.setType(thick.type);
                   setOpen(false); // Seçimden sonra kapat
@@ -137,16 +144,13 @@ const ThickSelector: FC<ThickSelectorProps> = (props): JSX.Element => {
                   stroke={thick.stroke}
                   isSelected={isSelected}
                 />
-              </div>
+              </button>
             );
           })}
         </div>
       </CustomPopover>
 
-      {/* Panel Başlığı: title */}
-      <div className="absolute bottom-0 w-full text-center text-xs font-semibold text-gray-600 pt-1">
-        Kalınlık
-      </div>
+      {/* Panel Başlığı Kaldırıldı (Yer kazanmak ve gereksiz tekrardan kaçınmak için) */}
     </div>
   );
 };
