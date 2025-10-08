@@ -1,5 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unused-vars */
-
 // Nokta koordinatları için temel arayüz (interface) tanımı
 export interface Point {
   x: number;
@@ -16,20 +14,14 @@ export const getMousePos = (
   canvas: HTMLCanvasElement,
   event: MouseEvent
 ): Point => {
-  // Canvas'ın tarayıcı penceresine göre konumunu alır (sol üst köşe)
-  const rect = canvas.getBoundingClientRect();
-
-  // Cihaz Piksel Oranını (DPI) al
+  // 1. Cihaz Piksel Oranını (DPR) al
   const dpr = window.devicePixelRatio || 1;
 
-  // Canvas üzerindeki göreceli konumu hesapla (clientX/Y - rect.left/top)
-  const rawX = event.clientX - rect.left;
-  const rawY = event.clientY - rect.top;
+  // 2. offsetX/Y Canvas CSS kutusuna göre doğrudur.
+  // 3. Ölçeklenmiş Canvas Context'i (ctx.scale(dpr, dpr)) için bu değeri DPI'a BÖL.
   return {
-    // Fare konumu (clientX/Y) ile Canvas'ın sol/üst konum farkı alınarak göreceli konum bulunur.
-
-    x: rawX / dpr,
-    y: rawY / dpr,
+    x: event.offsetX / dpr, // <-- DÜZELTME
+    y: event.offsetY / dpr, // <-- DÜZELTME
   };
 };
 
@@ -43,17 +35,11 @@ export const getTouchPos = (
   canvas: HTMLCanvasElement,
   event: TouchEvent
 ): Point => {
-  const rect = canvas.getBoundingClientRect();
-  const dpr = window.devicePixelRatio || 1;
-
-  // touches[0] ile Canvas'ın konum farkını al
-  const rawX = event.touches[0].clientX - rect.left;
-  const rawY = event.touches[0].clientY - rect.top;
-
+  // NOT: getBoundingClientRect() kullanmak genellikle offsetLeft/Top kullanmaktan daha modern ve güvenlidir.
   return {
-    // KRİTİK DÜZENLEME: Koordinatları DPI oranına bölerek çizim context'ine uygun hale getir.
-    x: rawX / dpr,
-    y: rawY / dpr,
+    // İlk dokunma noktasının (touches[0]) sayfa konumu ile Canvas'ın ofset konumu arasındaki farkı alır.
+    x: event.touches[0].pageX - canvas.offsetLeft,
+    y: event.touches[0].pageY - canvas.offsetTop,
   };
 };
 

@@ -129,16 +129,13 @@ class Shape extends Tool {
     pos: { x: number; y: number },
     isTouch: boolean = false
   ) {
-    const canvas = Tool.ctx.canvas;
-    const dpr = window.devicePixelRatio || 1;
-    const rect = canvas.getBoundingClientRect();
     // 1. Şekil çizilmeden önceki Canvas görüntüsünü kaydeder.
     // Bu, şekil hareket ettirilirken eski şeklin silinip yeni şeklin çizilebilmesi için gereklidir.
     this.saveImageData = Tool.ctx.getImageData(
       0,
       0,
-      rect.width, // Canvas'ın CSS genişliğini kullan
-      rect.height // Canvas'ın CSS yüksekliğini kullan
+      Tool.ctx.canvas.width,
+      Tool.ctx.canvas.height
     );
     this.isMouseDown = true;
     this.mouseDownPos = pos;
@@ -173,11 +170,10 @@ class Shape extends Tool {
   private operateMove(pos: { x: number; y: number }, isTouch: boolean = false) {
     if (this.isMouseDown && this.saveImageData) {
       const ctx = Tool.ctx;
-      const canvas = ctx.canvas;
-      const rect = canvas.getBoundingClientRect();
+
       // 1. Canvas'ı temizler
-      // ctx.clearRect(0, 0, Tool.ctx.canvas.width, Tool.ctx.canvas.height);
-      ctx.clearRect(0, 0, rect.width, rect.height);
+      ctx.clearRect(0, 0, Tool.ctx.canvas.width, Tool.ctx.canvas.height);
+
       // 2. Kaydedilen orijinal görüntüyü geri yükler
       ctx.putImageData(this.saveImageData, 0, 0);
 
@@ -231,15 +227,13 @@ class Shape extends Tool {
   ) {
     // 1. Kesikli çizgi ayarını sıfırlar, böylece sonraki çizimler düz olur.
     Tool.ctx.setLineDash([]);
-    const canvas = Tool.ctx.canvas;
-    const rect = canvas.getBoundingClientRect();
 
     // 2. Biten çizimin ImageData'sını alır
     let imageData = Tool.ctx.getImageData(
       0,
       0,
-      rect.width, // CSS Genişliği
-      rect.height // CSS Yüksekliği
+      Tool.ctx.canvas.width,
+      Tool.ctx.canvas.height
     );
 
     const colorRgb = hexToRgb(Tool.mainColor);

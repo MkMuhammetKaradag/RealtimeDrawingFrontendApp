@@ -64,30 +64,6 @@ const Canvas: FC<CanvasProps> = (props) => {
   const [snapshot] = useState(new Snapshot());
   const remoteToolRef = useRef<Tool | null>(null);
 
-  // YARDIMCI FONKSİYON: Mutlak koordinatları normalize eder (0-1 arası)
-  const normalizeCoordinates = (x: number, y: number) => {
-    const canvas = canvasRef.current;
-    if (!canvas) return { x: 0, y: 0 };
-
-    const rect = canvas.getBoundingClientRect();
-    return {
-      x: x / rect.width, // 0-1 arası oran
-      y: y / rect.height, // 0-1 arası oran
-    };
-  };
-
-  // YARDIMCI FONKSİYON: Normalize koordinatları mutlak koordinatlara çevirir
-  const denormalizeCoordinates = (normX: number, normY: number) => {
-    const canvas = canvasRef.current;
-    if (!canvas) return { x: 0, y: 0 };
-
-    const rect = canvas.getBoundingClientRect();
-    return {
-      x: normX * rect.width, // Oranı gerçek piksel değerine çevir
-      y: normY * rect.height, // Oranı gerçek piksel değerine çevir
-    };
-  };
-
   useEffect(() => {
     switch (toolType) {
       case ToolValue.PEN:
@@ -165,6 +141,7 @@ const Canvas: FC<CanvasProps> = (props) => {
       const dispatcher = dispatcherContext.dispatcher;
 
       const clearCanvas = () => {
+        console.log('temizleme');
         const ctx = canvas.getContext('2d');
         if (ctx) {
           ctx.fillStyle = 'white';
@@ -202,6 +179,7 @@ const Canvas: FC<CanvasProps> = (props) => {
       dispatcher.on(REDO_EVENT, forwardAction);
 
       const back = () => {
+        console.log('NABER');
         const ctx = canvas.getContext('2d');
         if (ctx) {
           const imageData = snapshot.back();
@@ -235,19 +213,24 @@ const Canvas: FC<CanvasProps> = (props) => {
     }
 
     const processRemoteDraw = async () => {
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+
       const {
         function: actionType,
         toolType: remoteToolType,
-        normX, // Normalize edilmiş koordinatlar kullan
-        normY,
+        normX, // Normalize koordinat
+        normY, // Normalize koordinat
         color,
         lineWidth,
         shapeType: remoteShapeType,
         shapeOutlineType: remoteShapeOutlineType,
       } = roomDrawData.content;
 
-      // Normalize koordinatları bu cihazın canvas boyutuna göre dönüştür
-      const { x, y } = denormalizeCoordinates(normX, normY);
+      // Normalize koordinatları gerçek piksel değerine çevir
+      const rect = canvas.getBoundingClientRect();
+      const x = normX * rect.width;
+      const y = normY * rect.height;
 
       const originalMainColor = Tool.mainColor;
       const originalLineWidthFactor = Tool.lineWidthFactor;
@@ -260,8 +243,8 @@ const Canvas: FC<CanvasProps> = (props) => {
         offsetY: y,
         buttons: 1,
         type: actionType,
-        clientX: x + Tool.ctx.canvas.offsetLeft,
-        clientY: y + Tool.ctx.canvas.offsetTop,
+        clientX: x,
+        clientY: y ,
         preventDefault: () => {},
       } as MouseEvent;
 
@@ -414,12 +397,13 @@ const Canvas: FC<CanvasProps> = (props) => {
       const colorToSend = toolType === ToolValue.ERASER ? subColor : mainColor;
       const rect = canvas.getBoundingClientRect();
 
-      // Canvas içindeki pozisyon
-      const x = event.clientX - rect.left;
-      const y = event.clientY - rect.top;
+      // Canvas içindeki pozisyon (offsetX/Y kullan)
+      const x = event.offsetX;
+      const y = event.offsetY;
 
-      // Normalize koordinatları hesapla (0-1 arası)
-      const normalized = normalizeCoordinates(x, y);
+      // Normalize koordinat hesapla (0-1 arası)
+      const normX = x / rect.width;
+      const normY = y / rect.height;
 
       tool.onMouseDown(event);
 
@@ -428,8 +412,8 @@ const Canvas: FC<CanvasProps> = (props) => {
         content: {
           type: 'canvas_action',
           function: 'draw_start',
-          normX: normalized.x, // Normalize X (0-1 arası)
-          normY: normalized.y, // Normalize Y (0-1 arası)
+          normX: normX,
+          normY: normY,
           toolType: props.toolType,
           color: colorToSend,
           shapeType:
@@ -454,17 +438,18 @@ const Canvas: FC<CanvasProps> = (props) => {
       const colorToSend = toolType === ToolValue.ERASER ? subColor : mainColor;
       const rect = canvas.getBoundingClientRect();
 
-      const x = event.clientX - rect.left;
-      const y = event.clientY - rect.top;
-      const normalized = normalizeCoordinates(x, y);
+      const x = event.offsetX;
+      const y = event.offsetY;
+      const normX = x / rect.width;
+      const normY = y / rect.height;
 
       props.sendMessage({
         type: 'canvas_action',
         content: {
           type: 'canvas_action',
           function: 'draw_move',
-          normX: normalized.x, // Normalize X
-          normY: normalized.y, // Normalize Y
+          normX: normX,
+          normY: normY,
           toolType: props.toolType,
           color: colorToSend,
           lineWidth: Tool.lineWidthFactor,
@@ -489,17 +474,18 @@ const Canvas: FC<CanvasProps> = (props) => {
       const colorToSend = toolType === ToolValue.ERASER ? subColor : mainColor;
       const rect = canvas.getBoundingClientRect();
 
-      const x = event.clientX - rect.left;
-      const y = event.clientY - rect.top;
-      const normalized = normalizeCoordinates(x, y);
+      const x = event.offsetX;
+      const y = event.offsetY;
+      const normX = x / rect.width;
+      const normY = y / rect.height;
 
       props.sendMessage({
         type: 'canvas_action',
         content: {
           type: 'canvas_action',
           function: 'draw_end',
-          normX: normalized.x, // Normalize X
-          normY: normalized.y, // Normalize Y
+          normX: normX,
+          normY: normY,
           toolType: props.toolType,
           color: colorToSend,
           lineWidth: Tool.lineWidthFactor,
