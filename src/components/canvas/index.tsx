@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { useEffect } from 'react';
 import { useRef } from 'react';
 import type {
@@ -31,6 +31,7 @@ import {
   logCanvasRedo,
   logCanvasResize,
 } from '../../util/logger';
+import { getCanvasCursorStyle } from '../../util/cursor/iconToCursor';
 
 interface CanvasProps {
   sendMessage: (data: any) => void;
@@ -44,7 +45,27 @@ interface CanvasProps {
   setColor: (value: string) => void;
   roomDrawData: any;
 }
-
+type TailwindCursorClass =
+  | 'cursor-crosshair'
+  | 'cursor-grab'
+  | 'cursor-text'
+  | 'cursor-zoom-in';
+const TAILWIND_CURSOR_MAP: Record<ToolType, TailwindCursorClass> = {
+  [ToolValue.PEN]: 'cursor-crosshair',
+  [ToolValue.ERASER]: 'cursor-grab',
+  [ToolValue.COLOR_EXTRACT]: 'cursor-crosshair',
+  [ToolValue.COLOR_FILL]: 'cursor-crosshair',
+  [ToolValue.SHAPE]: 'cursor-crosshair',
+  [ToolValue.TEXT]: 'cursor-text',
+  [ToolValue.MAGNIFYING]: 'cursor-zoom-in',
+};
+export const getCanvasCursorClass = (
+  toolType: ToolType
+): TailwindCursorClass => {
+  // Haritada aracı ara. Eğer toolType geçerli değilse veya
+  // haritada yoksa (ki TypeScript sayesinde olmayacak), varsayılanı kullanır.
+  return TAILWIND_CURSOR_MAP[toolType] ?? 'cursor-crosshair';
+};
 const Canvas: FC<CanvasProps> = (props) => {
   const {
     role,
@@ -244,7 +265,7 @@ const Canvas: FC<CanvasProps> = (props) => {
         buttons: 1,
         type: actionType,
         clientX: x,
-        clientY: y ,
+        clientY: y,
         preventDefault: () => {},
       } as MouseEvent;
 
@@ -551,11 +572,18 @@ const Canvas: FC<CanvasProps> = (props) => {
     }
   }, [canvasRef, onMouseDown, onMouseMove, onMouseUp]);
 
+  const cursorStyleValue = useMemo(() => {
+    // Hem aracı hem de dinamik rengi fonksiyona iletiyoruz
+    return getCanvasCursorStyle(toolType, mainColor, subColor);
+  }, [toolType, mainColor, subColor]);
   return (
     <canvas
-      className={`w-full h-full ${
+      className={`w-full h-full  ${
         role !== 'drawer' ? 'pointer-events-none' : ''
-      }`}
+      }    `}
+      style={{
+        cursor: cursorStyleValue,
+      }}
       ref={canvasRef}
     />
   );
