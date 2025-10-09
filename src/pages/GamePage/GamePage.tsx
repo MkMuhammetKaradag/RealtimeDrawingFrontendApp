@@ -2,15 +2,17 @@ import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useGameWebSocket } from './useGameWebSocket.ts';
 import Paint from '../paint/index.tsx';
+import { useAppSelector } from '../../store/hooks.ts';
+import { selectUser } from '../../store/slices/authSlice.ts';
 
 const GamePage: React.FC = () => {
   const { room_id } = useParams<{ room_id: string }>();
   const navigate = useNavigate();
-
+  const user = useAppSelector(selectUser);
   const [role, setRole] = useState<'drawer' | 'guesser' | null>(null);
-  const [gameStatus, setGameStatus] = useState<'idle' | 'started' | 'ended'>(
-    'idle'
-  );
+  const [gameStatus, setGameStatus] = useState<
+    'idle' | 'started' | 'ended' | 'waiting'
+  >('idle');
 
   const {
     connectionStatus,
@@ -22,8 +24,19 @@ const GamePage: React.FC = () => {
     roomId: room_id || '',
     sessionToken: document.cookie.split('session=')[1],
   });
+  /*
 
-  const [showJsonInput, setShowJsonInput] = useState(false);
+{
+  "type": "round_preparation",
+  "content": {
+    "drawer_id": "f7d7da3f-0f73-434d-8753-8f42c1724f14",
+    "message": "5 saniye içinde yeni tur başlayacak!",
+    "preparation_duration": 5,
+    "role": "guesser",
+    "round_number": 2,
+    "total_rounds": 2
+  }
+}*/
 
   // Uzak sunucudan gelen verileri işlemek için useEffect
   useEffect(() => {
@@ -32,7 +45,7 @@ const GamePage: React.FC = () => {
     if (roomData.type === 'canvas_update') {
       console.log('Canvas güncellemesi alındı:', roomData);
     } else if (roomData.type === 'game_started') {
-      setGameStatus('started');
+      setGameStatus('waiting');
     } else if (roomData.type === 'game_over') {
       setGameStatus('ended');
       setRole(null);
@@ -42,6 +55,39 @@ const GamePage: React.FC = () => {
     } else if (roomData.type === 'round_start_guesser') {
       setGameStatus('started');
       setRole('guesser');
+    } else if (roomData.type === 'game_status') {
+      // Güvenli tip kontrolü: 'game_data' özelliğinin mevcut olduğunu kontrol et
+      if ('game_data' in roomData) {
+        const data = (roomData as unknown as { game_data: any }).game_data;
+        const myId = user?.id; // Kendi ID'niz
+
+        // Oyun devam ediyorsa durumu 'started' olarak ayarla
+        if (data.state === 'in_progress') {
+          setGameStatus('started');
+
+          const currentDrawerId = data.mode_data.CurrentDrawer;
+
+          // Aktif çizerin ID'si, benim ID'mle aynıysa rolüm 'drawer'
+          if (currentDrawerId === myId) {
+            setRole('drawer');
+            console.log('Oyun Durumu Alındı: SEN ÇİZENSİN (Yeniden Bağlantı)!');
+          } else {
+            // Aksi halde rolüm 'guesser'
+            setRole('guesser');
+            console.log(
+              'Oyun Durumu Alındı: SEN TAHMİN EDENSİN (Yeniden Bağlantı)!'
+            );
+          }
+        } else if (data.state === 'finished' || data.state === 'over') {
+          setGameStatus('ended');
+          setRole(null);
+        }
+      } else {
+        console.warn(
+          'Beklenmeyen game_status mesajı: game_data eksik',
+          roomData
+        );
+      }
     }
   }, [roomData]);
 
@@ -86,9 +132,17 @@ const GamePage: React.FC = () => {
     <div className="min-h-screen bg-gradient-to-b from-gray-900 to-gray-800 p-4 sm:p-8">
       <div className="w-full max-w-7xl mx-auto">
         <header className="flex flex-col sm:flex-row justify-between items-center mb-6 p-4 bg-gray-800 rounded-xl shadow-lg">
-          <h1 className="text-3xl font-extrabold text-indigo-400">
-            🎨 Oyun Odası: {room_id}
-          </h1>
+          <div className="flex items-center">
+            <span
+              className="text-white hover:cursor-pointer"
+              onClick={() => navigate('/')}
+            >
+              Home
+            </span>
+            <h1 className="text-3xl font-extrabold text-indigo-400">
+              🎨 Oyun Odası: {room_id}
+            </h1>
+          </div>
           <div className="mt-2 sm:mt-0 flex items-center space-x-3">
             <span
               className={`px-3 py-1 text-sm font-semibold rounded-full ${
@@ -108,7 +162,13 @@ const GamePage: React.FC = () => {
         </header>
 
         {/* Ana İçerik Kartı */}
-        <div className="bg-white p-6 md:p-8 rounded-2xl shadow-2xl border border-gray-100">
+        <div
+          style={{
+            maxHeight: '80vh', // Ya da direkt Tailwind sınıfı
+            //overflowY: 'auto', // İçerik %80'i aşarsa kaydırma çubuğu çıksın
+          }}
+          className="bg-white p-6 md:p-8 rounded-2xl  shadow-2xl border border-gray-100"
+        >
           {/* Oyun Durumu Mesajları */}
           {gameStatus === 'started' && (
             <p className="text-center text-2xl font-black text-green-600 mb-6 bg-green-50 p-3 rounded-lg border-l-4 border-green-600">
@@ -122,21 +182,20 @@ const GamePage: React.FC = () => {
           )}
 
           {/* Hazırım Butonu (Rol Atanmadan Önce) */}
-          {role === null && gameStatus !== 'ended' && (
+          {role === null && gameStatus !== 'started' && (
             <div className="text-center mb-8 p-6 bg-indigo-50 rounded-xl border border-indigo-200">
-              <p className="text-xl font-semibold text-indigo-700 mb-4">
-                Rolünüzü Bekliyorsunuz. Hazır mısınız?
-              </p>
               <button
                 onClick={() => sendMessage({ type: 'game_started' })}
                 className="px-8 py-3 bg-indigo-600 text-white font-bold rounded-xl shadow-lg transition-all duration-200 hover:bg-indigo-700 transform hover:scale-105 active:scale-95"
               >
                 HEMEN BAŞLA!
               </button>
-              <p className="mt-4 text-gray-600 text-sm">
-                Oyunun başlaması için tüm oyuncuların hazır olması gerekir.
-              </p>
             </div>
+          )}
+          {role === null && gameStatus !== 'ended' && (
+            <p className="text-xl font-semibold text-indigo-700 mb-4">
+              Rolünüzü Bekliyorsunuz. Hazır mısınız?
+            </p>
           )}
 
           {/* Çizim Alanı (Paint Componenti) */}

@@ -57,7 +57,6 @@ const getVertexs = (
       points.push({ x: ex, y: ey });
       break;
     case ShapeToolValue.PENTAGON: // Beşgen (Beşgenin beş köşesi)
-      // Köşe koordinatları karmaşık matematiksel hesaplamalara dayanır
       points.push({ x: mx, y: sy });
       points.push({ x: ex, y: my });
       points.push({ x: 0.5 * (mx + ex), y: ey });
@@ -83,15 +82,84 @@ const getVertexs = (
       points.push({ x: sx + (1 / 3) * (ex - sx), y: my });
       points.push({ x: sx, y: my });
       break;
+    case ShapeToolValue.ARROW_LEFT: // Sol Ok // Ok gövdesinin (dikey) kalınlığını belirleyen oran
+      const shaftThicknessY = (1 / 3) * (ey - sy); // Ok şeklini oluşturan 7 nokta (X ve Y'nin rolleri değiştirildi)
+
+      points.push({ x: sx, y: my }); // 1. Uç (En sol)
+      points.push({ x: mx, y: sy }); // 2. Ok başının üst köşesi
+      points.push({ x: mx, y: sy + shaftThicknessY }); // 3. Gövde üst iç köşe
+      points.push({ x: ex, y: sy + shaftThicknessY }); // 4. Gövde üst sağ köşe (En sağ, üst gövde)
+      points.push({ x: ex, y: ey - shaftThicknessY }); // 5. Gövde alt sağ köşe (En sağ, alt gövde)
+      points.push({ x: mx, y: ey - shaftThicknessY }); // 6. Gövde alt iç köşe
+      points.push({ x: mx, y: ey }); // 7. Ok başının alt köşesi
+      break;
+    case ShapeToolValue.ARROW_RIGHT: // Sağ Ok
+      // Ok gövdesinin (dikey) kalınlığını belirleyen oran
+      const shaftThicknessYRight = (1 / 3) * (ey - sy);
+
+      // Ok şeklini oluşturan 7 nokta (Sol Ok'un X koordinatları ters çevrildi)
+      points.push({ x: ex, y: my }); // 1. Uç (En sağ)
+      points.push({ x: mx, y: sy }); // 2. Ok başının üst köşesi
+      points.push({ x: mx, y: sy + shaftThicknessYRight }); // 3. Gövde üst iç köşe
+      points.push({ x: sx, y: sy + shaftThicknessYRight }); // 4. Gövde üst sol köşe (En sol, üst gövde)
+      points.push({ x: sx, y: ey - shaftThicknessYRight }); // 5. Gövde alt sol köşe (En sol, alt gövde)
+      points.push({ x: mx, y: ey - shaftThicknessYRight }); // 6. Gövde alt iç köşe
+      points.push({ x: mx, y: ey }); // 7. Ok başının alt köşesi
+      break;
+    case ShapeToolValue.ARROW_DOWN: // Aşağı Ok
+      // Ok gövdesinin (yatay) kalınlığını belirleyen oran
+      const shaftThicknessXDown = (1 / 3) * (ex - sx);
+
+      // Ok şeklini oluşturan 7 nokta (Yukarı Ok'un Y koordinatları ters çevrildi)
+      points.push({ x: mx, y: ey }); // 1. Uç (En aşağı)
+      points.push({ x: ex, y: my }); // 2. Ok başının sağ köşesi
+      points.push({ x: ex - shaftThicknessXDown, y: my }); // 3. Gövde sağ iç köşe
+      points.push({ x: ex - shaftThicknessXDown, y: sy }); // 4. Gövde sağ üst köşe (En üst, sağ gövde)
+      points.push({ x: sx + shaftThicknessXDown, y: sy }); // 5. Gövde sol üst köşe (En üst, sol gövde)
+      points.push({ x: sx + shaftThicknessXDown, y: my }); // 6. Gövde sol iç köşe
+      points.push({ x: sx, y: my }); // 7. Ok başının sol köşesi
+      break;
     // Diğer ok türleri (ARROW_RIGHT, ARROW_DOWN, ARROW_LEFT) benzer mantıkla
     // dikdörtgen gövde ve üçgen başlıktan oluşur.
-    case ShapeToolValue.FOUR_STAR: // Dört Köşeli Yıldız (8 köşe)
-      const offsetX = 0.125 * (ex - sx), // Yatay ofset
-        offsetY = 0.125 * (ey - sy); // Dikey ofset
-      points.push({ x: mx, y: sy }); // Üst Köşe
-      points.push({ x: mx + offsetX, y: my - offsetY }); // İç Köşe
-      points.push({ x: ex, y: my }); // Sağ Köşe
-      // ... diğer köşeler
+    case ShapeToolValue.FOUR_STAR: // Dört Köşeli Yıldız
+      const rOuterFour = Math.max(Math.abs(ex - sx), Math.abs(ey - sy)) / 2;
+      // İç yarıçapı, dış yarıçapın yaklaşık %40'ı olarak belirleyelim
+      const rInnerFour = rOuterFour * 0.4;
+
+      const numPointsFour = 8;
+      // Başlangıç açısı 45 derece (π/4 radyan) olmalı ki yıldız dikey dursun
+      const startAngleFour = -Math.PI / 2;
+
+      for (let i = 0; i < numPointsFour; i++) {
+        const radius = i % 2 === 0 ? rOuterFour : rInnerFour;
+        const angle = startAngleFour + (i * 2 * Math.PI) / numPointsFour;
+
+        // Kutupsal koordinatlardan Kartezyen koordinatlara çevrim
+        const x = mx + radius * Math.cos(angle);
+        const y = my + radius * Math.sin(angle);
+
+        points.push({ x, y });
+      }
+      break;
+    case ShapeToolValue.FIVE_STAR: // Beş Köşeli Yıldız
+      const rOuterFive = Math.max(Math.abs(ex - sx), Math.abs(ey - sy)) / 2;
+      // İç yarıçapı, dış yarıçapın yaklaşık %40'ı olarak belirleyelim
+      const rInnerFive = rOuterFive * 0.4;
+
+      const numPointsFive = 10;
+      // Başlangıç açısı 90 derece (π/2 radyan) olmalı ki tek bir köşe yukarı baksın
+      const startAngleFive = -Math.PI / 2;
+
+      for (let i = 0; i < numPointsFive; i++) {
+        const radius = i % 2 === 0 ? rOuterFive : rInnerFive;
+        const angle = startAngleFive + (i * 2 * Math.PI) / numPointsFive;
+
+        // Kutupsal koordinatlardan Kartezyen koordinatlara çevrim
+        const x = mx + radius * Math.cos(angle);
+        const y = my + radius * Math.sin(angle);
+
+        points.push({ x, y });
+      }
       break;
     default:
       break;

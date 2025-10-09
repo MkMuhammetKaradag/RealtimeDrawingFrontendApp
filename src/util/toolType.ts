@@ -52,12 +52,15 @@ export const ShapeToolValue = {
   ARROW_LEFT: 'ARROW_LEFT',
   /** Dört Köşeli Yıldız */
   FOUR_STAR: 'FOUR_STAR',
+
+  FIVE_STAR: 'FIVE_STAR',
 } as const;
 
 /**
  * ShapeToolValue objesindeki tüm string literal değerlerinin birleşik tipi.
  */
-export type ShapeToolType = (typeof ShapeToolValue)[keyof typeof ShapeToolValue];
+export type ShapeToolType =
+  (typeof ShapeToolValue)[keyof typeof ShapeToolValue];
 
 // ====================================================================
 // 3. ShapeOutlineType (Şekil Ana Hat Tipleri)
@@ -76,7 +79,8 @@ export const ShapeOutlineValue = {
 /**
  * ShapeOutlineValue objesindeki tüm string literal değerlerinin birleşik tipi.
  */
-export type ShapeOutlineType = (typeof ShapeOutlineValue)[keyof typeof ShapeOutlineValue];
+export type ShapeOutlineType =
+  (typeof ShapeOutlineValue)[keyof typeof ShapeOutlineValue];
 
 // ====================================================================
 // 4. LineWidthType (Çizgi Kalınlığı Tipleri)
@@ -95,7 +99,8 @@ export const LineWidthValue = {
 /**
  * LineWidthValue objesindeki tüm string literal değerlerinin birleşik tipi.
  */
-export type LineWidthType = (typeof LineWidthValue)[keyof typeof LineWidthValue];
+export type LineWidthType =
+  (typeof LineWidthValue)[keyof typeof LineWidthValue];
 
 // ====================================================================
 // 5. ColorType (Renk Tipleri)

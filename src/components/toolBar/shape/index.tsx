@@ -12,6 +12,7 @@ import {
 } from 'react-icons/fa';
 import { AiOutlineLine } from 'react-icons/ai';
 import { BsTriangle, BsPentagon, BsHexagon, BsDiamond } from 'react-icons/bs';
+import { PiStarFour } from 'react-icons/pi';
 import {
   ShapeOutlineContext,
   ShapeTypeContext,
@@ -58,8 +59,13 @@ const shapes: { type: ShapeToolType; icon: JSX.Element; title: string }[] = [
   },
   {
     type: ShapeToolValue.FOUR_STAR,
-    icon: <FaRegStar />,
+    icon: <PiStarFour />,
     title: '4-Point Star',
+  },
+  {
+    type: ShapeToolValue.FIVE_STAR,
+    icon: <FaRegStar />,
+    title: '5-Point Star',
   },
 ];
 

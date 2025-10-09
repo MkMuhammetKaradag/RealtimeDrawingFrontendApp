@@ -43,7 +43,7 @@ import {
 
 interface PaintProps {
   role: 'drawer' | 'guesser' | null;
-  gameStatus: 'idle' | 'started' | 'ended';
+  gameStatus: 'idle' | 'started' | 'ended' | 'waiting';
   sendMessage: (data: any) => void;
   roomDrawData: WebSocketMessage | null;
 }
@@ -146,6 +146,7 @@ const Paint: React.FC<PaintProps> = ({
         [ShapeToolValue.ARROW_DOWN]: 'Aşağı Ok',
         [ShapeToolValue.ARROW_LEFT]: 'Sol Ok',
         [ShapeToolValue.FOUR_STAR]: 'Dört Köşeli Yıldız',
+        [ShapeToolValue.FIVE_STAR]: 'Beş Köşeli Yıldız',
       };
       logAction('Şekil değiştirildi', { yeniSekil: shapeNames[newShape] });
     },
@@ -280,7 +281,7 @@ const Paint: React.FC<PaintProps> = ({
                   // 💡 KRİTİK DÜZENLEME: RESPONSIVE ÇERÇEVE
                   // Mobil: flex-col-reverse (Toolbar alta) | Masaüstü (md:): flex-row (Toolbar sola)
 
-                  <div className="flex  md:flex-row w-full max-w-full h-full min-h-[50vh] md:min-h-[70vh] bg-gray-50 rounded-lg shadow-xl">
+                  <div className="flex  md:flex-row w-full max-w-full h-full   bg-gray-50 rounded-lg shadow-xl">
                     {/* 1. TOOLBAR ALANI (SADECE DRAWER İÇİN) */}
                     {role === 'drawer' && (
                       // Masaüstü: Sabit genişlik (max-w-xs), Kalın gölge
@@ -290,25 +291,21 @@ const Paint: React.FC<PaintProps> = ({
                         <Toolbar />
                       </div>
                     )}
-
                     {/* 2. CANVAS ALANI */}
-                    {/* flex-grow: Kalan tüm alanı kaplar */}
-                    <div className="flex-grow flex items-center bg-red-200 justify-center overflow-auto">
-                      {/* KRİTİK DÜZENLEME: max-w-4xl ve max-h-4xl sınırlamaları kaldırıldı. */}{' '}
-                      <div className="w-full cur h-full  bg-yellow-100 flex items-center justify-center">
-                        <Canvas
-                          sendMessage={sendMessage}
-                          roomDrawData={roomDrawData}
-                          role={role}
-                          toolType={toolType}
-                          shapeType={shapeType}
-                          shapeOutlineType={shapeOutlineType}
-                          mainColor={mainColor}
-                          subColor={subColor}
-                          lineWidthType={lineWidthType}
-                          setColor={setColor}
-                        />
-                      </div>
+
+                    <div className="w-full cur h-full flex-grow  bg-yellow-100 flex items-center justify-center">
+                      <Canvas
+                        sendMessage={sendMessage}
+                        roomDrawData={roomDrawData}
+                        role={role}
+                        toolType={toolType}
+                        shapeType={shapeType}
+                        shapeOutlineType={shapeOutlineType}
+                        mainColor={mainColor}
+                        subColor={subColor}
+                        lineWidthType={lineWidthType}
+                        setColor={setColor}
+                      />
                     </div>
                   </div>
                 )}
