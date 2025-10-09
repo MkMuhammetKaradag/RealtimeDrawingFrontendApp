@@ -281,7 +281,7 @@ const Paint: React.FC<PaintProps> = ({
                   // 💡 KRİTİK DÜZENLEME: RESPONSIVE ÇERÇEVE
                   // Mobil: flex-col-reverse (Toolbar alta) | Masaüstü (md:): flex-row (Toolbar sola)
 
-                  <div className="flex  md:flex-row w-full max-w-full h-full   bg-gray-50 rounded-lg shadow-xl">
+                  <div className="flex  h-[80%]  md:h-[90%]   md:flex-row w-full max-w-full   bg-gray-50 rounded-lg shadow-xl">
                     {/* 1. TOOLBAR ALANI (SADECE DRAWER İÇİN) */}
                     {role === 'drawer' && (
                       // Masaüstü: Sabit genişlik (max-w-xs), Kalın gölge

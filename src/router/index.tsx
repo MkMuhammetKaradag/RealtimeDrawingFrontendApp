@@ -36,33 +36,35 @@ const AppRouter = () => {
   const isAuthenticated = useAppSelector(selectIsAuthenticated);
 
   return (
-    <Routes>
-      {/* Kimlik doğrulama sayfası. Kullanıcı giriş yapmışsa anasayfaya yönlendirilir. */}
-      <Route
-        path="/auth"
-        element={!isAuthenticated ? <AuthPage /> : <Navigate to="/" />}
-      />
+    <div className="bg-gradient-to-b from-gray-900 to-gray-800 ">
+      <Routes>
+        {/* Kimlik doğrulama sayfası. Kullanıcı giriş yapmışsa anasayfaya yönlendirilir. */}
+        <Route
+          path="/auth"
+          element={!isAuthenticated ? <AuthPage /> : <Navigate to="/" />}
+        />
 
-      {/* Ana sayfa ve diğer korumalı yollar */}
-      <Route
-        path="/"
-        element={
-          <ProtectedRoute>
-            <HomePage />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/game/:room_id"
-        element={
-          <ProtectedRoute>
-            <GamePage />
-          </ProtectedRoute>
-        }
-      />
-      {/* Tanımlanmamış tüm yollar için 404 sayfası */}
-      <Route path="*" element={<NotFoundPage />} />
-    </Routes>
+        {/* Ana sayfa ve diğer korumalı yollar */}
+        <Route
+          path="/"
+          element={
+            <ProtectedRoute>
+              <HomePage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/game/:room_id"
+          element={
+            <ProtectedRoute>
+              <GamePage />
+            </ProtectedRoute>
+          }
+        />
+        {/* Tanımlanmamış tüm yollar için 404 sayfası */}
+        <Route path="*" element={<NotFoundPage />} />
+      </Routes>
+    </div>
   );
 };
 

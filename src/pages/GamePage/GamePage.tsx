@@ -9,6 +9,7 @@ const GamePage: React.FC = () => {
   const { room_id } = useParams<{ room_id: string }>();
   const navigate = useNavigate();
   const user = useAppSelector(selectUser);
+  const [guess, setGuess] = useState('');
   const [role, setRole] = useState<'drawer' | 'guesser' | null>(null);
   const [gameStatus, setGameStatus] = useState<
     'idle' | 'started' | 'ended' | 'waiting'
@@ -24,6 +25,20 @@ const GamePage: React.FC = () => {
     roomId: room_id || '',
     sessionToken: document.cookie.split('session=')[1],
   });
+  const handleGuessSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!guess.trim()) return; // Tahmin mesajını WebSocket üzerinden gönder
+
+    sendMessage({
+      type: 'player_move',
+      content: {
+        type: 'guess',
+        text: guess.trim(),
+      },
+    });
+    console.log('Gönderilen Tahmin (Backend simülasyonu):', guess.trim()); // Input'u temizle
+    setGuess('');
+  };
   /*
 
 {
@@ -129,7 +144,7 @@ const GamePage: React.FC = () => {
 
   // --- Ana Oyun Sayfası (Modern Tasarım) ---
   return (
-    <div className="min-h-screen bg-gradient-to-b from-gray-900 to-gray-800 p-4 sm:p-8">
+    <div className="min-h-screen">
       <div className="w-full max-w-7xl mx-auto">
         <header className="flex flex-col sm:flex-row justify-between items-center mb-6 p-4 bg-gray-800 rounded-xl shadow-lg">
           <div className="flex items-center">
@@ -164,23 +179,22 @@ const GamePage: React.FC = () => {
         {/* Ana İçerik Kartı */}
         <div
           style={{
-            maxHeight: '80vh', // Ya da direkt Tailwind sınıfı
+            height: '80vh', // Ya da direkt Tailwind sınıfı
             //overflowY: 'auto', // İçerik %80'i aşarsa kaydırma çubuğu çıksın
           }}
           className="bg-white p-6 md:p-8 rounded-2xl  shadow-2xl border border-gray-100"
         >
           {/* Oyun Durumu Mesajları */}
-          {gameStatus === 'started' && (
+          {/* {gameStatus === 'started' && (
             <p className="text-center text-2xl font-black text-green-600 mb-6 bg-green-50 p-3 rounded-lg border-l-4 border-green-600">
               Oyun BAŞLADI! 🚀
             </p>
-          )}
+          )} */}
           {gameStatus === 'ended' && (
             <p className="text-center text-2xl font-black text-red-600 mb-6 bg-red-50 p-3 rounded-lg border-l-4 border-red-600">
               Oyun SONA ERDİ. 🏁
             </p>
           )}
-
           {/* Hazırım Butonu (Rol Atanmadan Önce) */}
           {role === null && gameStatus !== 'started' && (
             <div className="text-center mb-8 p-6 bg-indigo-50 rounded-xl border border-indigo-200">
@@ -197,14 +211,49 @@ const GamePage: React.FC = () => {
               Rolünüzü Bekliyorsunuz. Hazır mısınız?
             </p>
           )}
-
           {/* Çizim Alanı (Paint Componenti) */}
+          {gameStatus === 'started' && role === 'drawer' && (
+            <p className="text-center text-2xl font-black text-green-600 mb-6 bg-green-50 p-3 rounded-lg border-l-4 border-green-600">
+              Kelime
+            </p>
+          )}
           <Paint
             role={role}
             gameStatus={gameStatus}
             sendMessage={sendMessage}
             roomDrawData={roomDrawData}
           />
+          {/* 👇 TAHMİN ALANI - SADECE GUESSER İÇİN GÖRÜNÜR */}{' '}
+          {role === 'guesser' && gameStatus === 'started' && (
+            <form
+              onSubmit={handleGuessSubmit}
+              className="mt-6 flex flex-col md:flex-row gap-3"
+            >
+              {/*
+            flex-col: Mobil/varsayılan görünümde dikey yığınlama
+            md:flex-row: Orta ekran ve üzerinde yatay düzen
+            gap-3: Öğeler arası boşluk
+        */}
+              <input
+                type="text"
+                value={guess}
+                onChange={(e) => setGuess(e.target.value)}
+                placeholder="Tahmininizi buraya yazın..."
+                // Mobil cihazlarda tam genişlik kaplaması için w-full eklendi
+                className="flex-grow p-3 border-2 border-indigo-300 rounded-lg focus:outline-none focus:border-indigo-500 transition duration-150"
+                disabled={connectionStatus !== 'connected'}
+              />
+              <button
+                type="submit"
+                // Mobil cihazlarda tam genişlik kaplaması için w-full eklendi
+                // md:w-auto ile orta ekranda butonun genişliğini içeriği kadar yaptık
+                className=" md:w-auto px-6 py-3 bg-indigo-600 text-white font-bold rounded-lg shadow-md hover:bg-indigo-700 transition duration-150 disabled:bg-indigo-400"
+                disabled={!guess.trim() || connectionStatus !== 'connected'}
+              >
+                TAHMİN ET! 💬
+              </button>
+            </form>
+          )}
         </div>
 
         {/* Alt Bilgi ve Konsol Verisi */}
