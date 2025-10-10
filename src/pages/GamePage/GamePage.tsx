@@ -1,9 +1,21 @@
+// src/pages/GamePage.tsx
+
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useGameWebSocket } from './useGameWebSocket.ts';
 import Paint from '../paint/index.tsx';
 import { useAppSelector } from '../../store/hooks.ts';
 import { selectUser } from '../../store/slices/authSlice.ts';
+import GameSettingsForm from '../../components/game/GameSettingsForm.tsx';
+// Yeni bileşeni import et
+
+// Ayar türlerini tanımlayalım (Backend'den beklenen format)
+interface GameSettings {
+  total_rounds: number;
+  round_duration: number; // Saniye
+  max_players: number;
+  min_players: number;
+}
 
 const GamePage: React.FC = () => {
   const { room_id } = useParams<{ room_id: string }>();
@@ -14,6 +26,15 @@ const GamePage: React.FC = () => {
   const [gameStatus, setGameStatus] = useState<
     'idle' | 'started' | 'ended' | 'waiting'
   >('idle');
+  // Yeni: Oda ayarlarını tutmak için state
+  const [gameSettings, setGameSettings] = useState<GameSettings>({
+    total_rounds: 5,
+    round_duration: 60,
+    max_players: 8,
+    min_players: 2,
+  });
+  // Yeni: Oda sahibi (host) kontrolü
+  const [isHost, setIsHost] = useState(true); // Varsayılan olarak true, backend'den güncellenmeli
 
   const {
     connectionStatus,
@@ -25,9 +46,84 @@ const GamePage: React.FC = () => {
     roomId: room_id || '',
     sessionToken: document.cookie.split('session=')[1],
   });
+
+  // Ayar Değişikliklerini İşlemek ve WebSocket ile Göndermek İçin Fonksiyon
+  const handleSettingChange = (name: keyof GameSettings, value: number) => {
+    // **1. Güncel ayarları hesapla**
+
+    if (value < 1) {
+      console.warn(
+        `${name} için minimum değer 1 olmalıdır. İşlem iptal edildi.`
+      );
+      // Kullanıcıya geri bildirim göstermek isteyebilirsiniz (örn. toast mesajı)
+      return;
+    }
+
+    // b) Özel Kısıtlamalar
+    if (name === 'max_players' && value > 10) {
+      console.warn(`Maksimum oyuncu sayısı 10'u geçemez. İşlem iptal edildi.`);
+      // Kullanıcıya hata mesajı gösterin
+      return;
+    }
+    if (name === 'total_rounds' && value > 10) {
+      console.warn(`Round sayısı 10'u geçemez. İşlem iptal edildi.`);
+      // Kullanıcıya hata mesajı gösterin
+      return;
+    }
+    // c) Minimum ve Maksimum Oyuncu Tutarlılığı Kontrolü (Gelişmiş)
+    if (name === 'min_players') {
+      // Eğer girilen min değer, mevcut max değerden büyükse
+      if (value > gameSettings.max_players) {
+        console.warn(
+          `Minimum oyuncu sayısı (${value}), maksimum oyuncu sayısından (${gameSettings.max_players}) büyük olamaz.`
+        );
+        return;
+      }
+    }
+    // Bu, state'in asenkron doğasını atlatan ve her zaman en güncel bilgiyi baz alan en güvenli yöntemdir.
+    setGameSettings((prevSettings) => {
+      // 2. Yeni ayar objesini oluştur
+      const updatedSettings: GameSettings = {
+        ...prevSettings,
+        [name]: value,
+      };
+
+      // 3. WebSocket üzerinden sunucuya ayar güncelleme mesajını gönder
+      // NOT: Bu, state'in güncellenmesini beklemez, güncellemek istediğimiz değeri gönderir.
+      sendMessage({
+        type: 'game_settings_update',
+        content: { ...updatedSettings }, // Hesaplanan updatedSettings'i kullan
+      });
+
+      // 4. Local state'i güncelle (React bunu asenkron yapar)
+      return updatedSettings;
+    });
+  };
+  // Oyunu Başlatma Fonksiyonu
+  const handleStartGame = () => {
+    // Oyun Başlatma mesajını gönderirken güncel ayarları ekle
+    sendMessage({
+      type: 'game_started',
+      content: {
+        //settings: gameSettings,
+      },
+    });
+  };
+
+  const handleUpdatedSettingGame = () => {
+    // Oyun Başlatma mesajını gönderirken güncel ayarları ekle
+    console.log(gameSettings);
+    sendMessage({
+      type: 'game_settings_update',
+      content: {
+        ...gameSettings,
+      },
+    });
+  };
+
   const handleGuessSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!guess.trim()) return; // Tahmin mesajını WebSocket üzerinden gönder
+    if (!guess.trim()) return;
 
     sendMessage({
       type: 'player_move',
@@ -36,22 +132,8 @@ const GamePage: React.FC = () => {
         text: guess.trim(),
       },
     });
-    console.log('Gönderilen Tahmin (Backend simülasyonu):', guess.trim()); // Input'u temizle
     setGuess('');
   };
-  /*
-
-{
-  "type": "round_preparation",
-  "content": {
-    "drawer_id": "f7d7da3f-0f73-434d-8753-8f42c1724f14",
-    "message": "5 saniye içinde yeni tur başlayacak!",
-    "preparation_duration": 5,
-    "role": "guesser",
-    "round_number": 2,
-    "total_rounds": 2
-  }
-}*/
 
   // Uzak sunucudan gelen verileri işlemek için useEffect
   useEffect(() => {
@@ -70,31 +152,41 @@ const GamePage: React.FC = () => {
     } else if (roomData.type === 'round_start_guesser') {
       setGameStatus('started');
       setRole('guesser');
+    } else if (
+      roomData.type === 'game_settings_updated' &&
+      'content' in roomData
+    ) {
+      // Sunucudan gelen ayarları güncelle
+      const newSettings = roomData.content as GameSettings;
+      setGameSettings(newSettings);
+      console.log('Oyun Ayarları Güncellendi:', newSettings);
     } else if (roomData.type === 'game_status') {
-      // Güvenli tip kontrolü: 'game_data' özelliğinin mevcut olduğunu kontrol et
       if ('game_data' in roomData) {
         const data = (roomData as unknown as { game_data: any }).game_data;
-        const myId = user?.id; // Kendi ID'niz
+        const myId = user?.id;
 
-        // Oyun devam ediyorsa durumu 'started' olarak ayarla
+        // HOST KONTROLÜ: Sunucudan gelen veride host ID'si varsa kontrol et
+        if (data.mode_data.HostId && myId === data.mode_data.HostId) {
+          setIsHost(true);
+        } else {
+          setIsHost(false);
+        }
+
+        // Sunucudan gelen ayarları al
+        if (data.mode_data.Settings) {
+          setGameSettings(data.mode_data.Settings);
+        }
+
         if (data.state === 'in_progress') {
           setGameStatus('started');
-
           const currentDrawerId = data.mode_data.CurrentDrawer;
-
-          // Aktif çizerin ID'si, benim ID'mle aynıysa rolüm 'drawer'
-          if (currentDrawerId === myId) {
-            setRole('drawer');
-            console.log('Oyun Durumu Alındı: SEN ÇİZENSİN (Yeniden Bağlantı)!');
-          } else {
-            // Aksi halde rolüm 'guesser'
-            setRole('guesser');
-            console.log(
-              'Oyun Durumu Alındı: SEN TAHMİN EDENSİN (Yeniden Bağlantı)!'
-            );
-          }
+          setRole(currentDrawerId === myId ? 'drawer' : 'guesser');
         } else if (data.state === 'finished' || data.state === 'over') {
-          setGameStatus('ended');
+          setGameStatus('idle');
+          setRole(null);
+        } else if (data.state === 'waiting_for_players') {
+          // Oyun başlamadan önceki bekleme durumu
+          setGameStatus('idle');
           setRole(null);
         }
       } else {
@@ -104,9 +196,10 @@ const GamePage: React.FC = () => {
         );
       }
     }
-  }, [roomData]);
+  }, [roomData, user?.id]);
 
-  // --- Bağlantı Durumu Kartı (Daha Modern Hata Görüntüsü) ---
+  // --- Bağlantı Durumu Kartı --- (Değişmedi)
+
   if (connectionStatus === 'connecting') {
     return (
       <div className="flex items-center justify-center min-h-screen bg-gray-900">
@@ -142,17 +235,17 @@ const GamePage: React.FC = () => {
     );
   }
 
-  // --- Ana Oyun Sayfası (Modern Tasarım) ---
+  // --- Ana Oyun Sayfası ---
   return (
     <div className="min-h-screen">
-      <div className="w-full max-w-7xl mx-auto">
+      <div className="w-full max-w-7xl mx-auto p-4">
         <header className="flex flex-col sm:flex-row justify-between items-center mb-6 p-4 bg-gray-800 rounded-xl shadow-lg">
-          <div className="flex items-center">
+          <div className="flex items-center space-x-4">
             <span
-              className="text-white hover:cursor-pointer"
+              className="text-white hover:cursor-pointer text-xl font-medium"
               onClick={() => navigate('/')}
             >
-              Home
+              🏠 Home
             </span>
             <h1 className="text-3xl font-extrabold text-indigo-400">
               🎨 Oyun Odası: {room_id}
@@ -176,95 +269,73 @@ const GamePage: React.FC = () => {
           </div>
         </header>
 
-        {/* Ana İçerik Kartı */}
+        {/* Ana İçerik Alanı */}
         <div
-          style={{
-            height: '80vh', // Ya da direkt Tailwind sınıfı
-            //overflowY: 'auto', // İçerik %80'i aşarsa kaydırma çubuğu çıksın
-          }}
-          className="bg-white p-6 md:p-8 rounded-2xl  shadow-2xl border border-gray-100"
+          style={{ height: gameStatus === 'idle' ? 'auto' : '80vh' }}
+          className="bg-white p-6 md:p-8 rounded-2xl shadow-2xl border border-gray-100"
         >
-          {/* Oyun Durumu Mesajları */}
-          {/* {gameStatus === 'started' && (
-            <p className="text-center text-2xl font-black text-green-600 mb-6 bg-green-50 p-3 rounded-lg border-l-4 border-green-600">
-              Oyun BAŞLADI! 🚀
-            </p>
-          )} */}
+          {/* OYUN AYARLARI FORMU - Sadece 'idle' durumunda göster */}
+          {gameStatus === 'idle' && (
+            <GameSettingsForm
+              settings={gameSettings}
+              onSettingChange={handleSettingChange}
+              onStartGame={handleStartGame}
+              onUpdatedSetting={handleUpdatedSettingGame}
+              isHost={isHost}
+            />
+          )}
+
+          {/* OYUN BAŞLADIYSA: Çizim Alanı ve Tahmin */}
+          {gameStatus === 'started' && (
+            <>
+              {role === 'drawer' && (
+                <p className="text-center text-2xl font-black text-green-600 mb-6 bg-green-50 p-3 rounded-lg border-l-4 border-green-600">
+                  Çizeceğiniz Kelime
+                </p>
+              )}
+              <Paint
+                role={role}
+                gameStatus={gameStatus}
+                sendMessage={sendMessage}
+                roomDrawData={roomDrawData}
+              />
+
+              {/* TAHMİN ALANI - SADECE GUESSER İÇİN GÖRÜNÜR */}
+              {role === 'guesser' && (
+                <form
+                  onSubmit={handleGuessSubmit}
+                  className="mt-6 flex flex-col md:flex-row gap-3"
+                >
+                  <input
+                    type="text"
+                    value={guess}
+                    onChange={(e) => setGuess(e.target.value)}
+                    placeholder="Tahmininizi buraya yazın..."
+                    className="flex-grow p-3 border-2 border-indigo-300 rounded-lg focus:outline-none focus:border-indigo-500 transition duration-150"
+                    disabled={connectionStatus !== 'connected'}
+                  />
+                  <button
+                    type="submit"
+                    className="md:w-auto px-6 py-3 bg-indigo-600 text-white font-bold rounded-lg shadow-md hover:bg-indigo-700 transition duration-150 disabled:bg-indigo-400"
+                    disabled={!guess.trim() || connectionStatus !== 'connected'}
+                  >
+                    TAHMİN ET! 💬
+                  </button>
+                </form>
+              )}
+            </>
+          )}
+
+          {/* OYUN SONA ERDİ MESAJI */}
           {gameStatus === 'ended' && (
             <p className="text-center text-2xl font-black text-red-600 mb-6 bg-red-50 p-3 rounded-lg border-l-4 border-red-600">
               Oyun SONA ERDİ. 🏁
             </p>
           )}
-          {/* Hazırım Butonu (Rol Atanmadan Önce) */}
-          {role === null && gameStatus !== 'started' && (
-            <div className="text-center mb-8 p-6 bg-indigo-50 rounded-xl border border-indigo-200">
-              <button
-                onClick={() => sendMessage({ type: 'game_started' })}
-                className="px-8 py-3 bg-indigo-600 text-white font-bold rounded-xl shadow-lg transition-all duration-200 hover:bg-indigo-700 transform hover:scale-105 active:scale-95"
-              >
-                HEMEN BAŞLA!
-              </button>
-            </div>
-          )}
-          {role === null && gameStatus !== 'ended' && (
-            <p className="text-xl font-semibold text-indigo-700 mb-4">
-              Rolünüzü Bekliyorsunuz. Hazır mısınız?
-            </p>
-          )}
-          {/* Çizim Alanı (Paint Componenti) */}
-          {gameStatus === 'started' && role === 'drawer' && (
-            <p className="text-center text-2xl font-black text-green-600 mb-6 bg-green-50 p-3 rounded-lg border-l-4 border-green-600">
-              Kelime
-            </p>
-          )}
-          <Paint
-            role={role}
-            gameStatus={gameStatus}
-            sendMessage={sendMessage}
-            roomDrawData={roomDrawData}
-          />
-          {/* 👇 TAHMİN ALANI - SADECE GUESSER İÇİN GÖRÜNÜR */}{' '}
-          {role === 'guesser' && gameStatus === 'started' && (
-            <form
-              onSubmit={handleGuessSubmit}
-              className="mt-6 flex flex-col md:flex-row gap-3"
-            >
-              {/*
-            flex-col: Mobil/varsayılan görünümde dikey yığınlama
-            md:flex-row: Orta ekran ve üzerinde yatay düzen
-            gap-3: Öğeler arası boşluk
-        */}
-              <input
-                type="text"
-                value={guess}
-                onChange={(e) => setGuess(e.target.value)}
-                placeholder="Tahmininizi buraya yazın..."
-                // Mobil cihazlarda tam genişlik kaplaması için w-full eklendi
-                className="flex-grow p-3 border-2 border-indigo-300 rounded-lg focus:outline-none focus:border-indigo-500 transition duration-150"
-                disabled={connectionStatus !== 'connected'}
-              />
-              <button
-                type="submit"
-                // Mobil cihazlarda tam genişlik kaplaması için w-full eklendi
-                // md:w-auto ile orta ekranda butonun genişliğini içeriği kadar yaptık
-                className=" md:w-auto px-6 py-3 bg-indigo-600 text-white font-bold rounded-lg shadow-md hover:bg-indigo-700 transition duration-150 disabled:bg-indigo-400"
-                disabled={!guess.trim() || connectionStatus !== 'connected'}
-              >
-                TAHMİN ET! 💬
-              </button>
-            </form>
-          )}
         </div>
 
         {/* Alt Bilgi ve Konsol Verisi */}
         <footer className="text-center text-gray-400 mt-8">
-          {role === 'guesser' && (
-            <p className="text-lg font-medium text-indigo-300">
-              Sıra çizen oyuncuda. Gözleriniz tuvalde!
-            </p>
-          )}
-
-          {/* Debug/Son Veri Alanı */}
           {roomData && (
             <div className="mt-6 p-4 bg-gray-700 rounded-xl text-left text-sm overflow-auto max-h-48 shadow-inner">
               <p className="text-gray-300 font-bold mb-2">
