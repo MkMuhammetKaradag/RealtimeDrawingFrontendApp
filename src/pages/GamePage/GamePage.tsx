@@ -7,6 +7,7 @@ import Paint from '../paint/index.tsx';
 import { useAppSelector } from '../../store/hooks.ts';
 import { selectUser } from '../../store/slices/authSlice.ts';
 import GameSettingsForm from '../../components/game/GameSettingsForm.tsx';
+import { updateGameMode } from '../../services/game.service.ts';
 // Yeni bileşeni import et
 
 // Ayar türlerini tanımlayalım (Backend'den beklenen format)
@@ -15,6 +16,7 @@ interface GameSettings {
   round_duration: number; // Saniye
   max_players: number;
   min_players: number;
+  game_mode_id: number;
 }
 
 const GamePage: React.FC = () => {
@@ -32,6 +34,7 @@ const GamePage: React.FC = () => {
     round_duration: 60,
     max_players: 8,
     min_players: 2,
+    game_mode_id: 1,
   });
   // Yeni: Oda sahibi (host) kontrolü
   const [isHost, setIsHost] = useState(true); // Varsayılan olarak true, backend'den güncellenmeli
@@ -98,6 +101,26 @@ const GamePage: React.FC = () => {
       // 4. Local state'i güncelle (React bunu asenkron yapar)
       return updatedSettings;
     });
+  };
+
+  const handleUpdateGameMode = async (modeId: number) => {
+    if (!room_id) return;
+
+    try {
+      // 1. API isteğini gönder
+      await updateGameMode(room_id, modeId);
+
+      // 2. İstek başarılı olursa local state'i güncelle
+      setGameSettings((prevSettings) => ({
+        ...prevSettings,
+        game_mode_id: modeId,
+      }));
+
+      console.log(`Oyun Modu ID ${modeId} olarak güncellendi.`);
+    } catch (error) {
+      console.error('Oyun modu güncellenemedi:', error);
+      // Kullanıcıya hata bildirimi gösterilebilir
+    }
   };
   // Oyunu Başlatma Fonksiyonu
   const handleStartGame = () => {
@@ -195,6 +218,31 @@ const GamePage: React.FC = () => {
           roomData
         );
       }
+    } else if (roomData.type === 'room_status') {
+      // 'is_host' özelliği WebSocketMessage tipinde olmayabilir; önce varlığını kontrol edip güvenli şekilde okuyalım
+      if ('is_host' in roomData) {
+        const hostFlag = (roomData as any).is_host;
+        if (typeof hostFlag !== 'undefined') {
+          setIsHost(Boolean(hostFlag));
+        }
+      }
+    } else if (roomData.type === 'game_mode_changed') {
+      // Kontrol: game_mode_id özelliğinin varlığını ve boş olmadığını kontrol et
+      if ('game_mode_id' in roomData.content) {
+        // Veri string bile gelse Number() ile güvenli şekilde sayıya çeviriyoruz
+        const modID = Number((roomData.content as any).game_mode_id);
+
+        // modID'nin geçerli bir sayı olup olmadığını kontrol et
+        if (!isNaN(modID)) {
+          // *** ÖNEMLİ DÜZELTME: React Değişmezlik Kuralı ***
+          setGameSettings((prev) => ({
+            ...prev, // Önceki ayarları kopyala
+            game_mode_id: modID, // Yalnızca bu alanı güncelle
+          }));
+
+          console.log(`Oyun Modu (WS) üzerinden ${modID} olarak güncellendi.`);
+        }
+      }
     }
   }, [roomData, user?.id]);
 
@@ -281,6 +329,7 @@ const GamePage: React.FC = () => {
               onSettingChange={handleSettingChange}
               onStartGame={handleStartGame}
               onUpdatedSetting={handleUpdatedSettingGame}
+              onUpdateGameMode={handleUpdateGameMode}
               isHost={isHost}
             />
           )}

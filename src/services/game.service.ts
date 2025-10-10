@@ -79,3 +79,30 @@ export const getVisibleRooms = async (): Promise<GetRoomsResponse> => {
 // - Odaya Katılma (Şifresiz)
 // - Oyundan Ayrılma
 // ...
+
+/**
+ * Bir odanın oyun modunu değiştirir.
+ * @param {string} roomId - Ayarı değiştirilecek odanın ID'si.
+ * @param {number} gameModeId - Yeni oyun modu ID'si (örn. 1, 2, 3...).
+ * @returns {Promise<any>} Sunucudan gelen yanıt.
+ */
+export const updateGameMode = async (
+  roomId: string,
+  gameModeId: number
+): Promise<any> => {
+  try {
+    const response = await gameApi.patch(
+      `/game/game-mode/${roomId}`, // İsteğinizin tam URL'si: http://localhost:8080/game/game-mode/:room_id
+      {
+        game_mode_id: gameModeId,
+      }
+    );
+    return response.data;
+  } catch (error) {
+    console.error(
+      `Oyun modu güncellenirken hata oluştu (Oda ID: ${roomId}, Mod ID: ${gameModeId}):`,
+      error
+    );
+    throw error;
+  }
+};

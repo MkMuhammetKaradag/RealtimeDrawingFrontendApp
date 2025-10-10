@@ -8,6 +8,7 @@ interface GameSettings {
   round_duration: number; // Saniye
   max_players: number;
   min_players: number;
+  game_mode_id: number;
 }
 
 // Props arayüzünü tanımlayalım
@@ -16,22 +17,35 @@ interface GameSettingsFormProps {
   onSettingChange: (name: keyof GameSettings, value: number) => void;
   onStartGame: () => void;
   onUpdatedSetting: () => void;
+  onUpdateGameMode: (modeId: number) => void;
   isHost: boolean; // Sadece host'un ayar yapabilmesi için
 }
-
+const GAME_MODES = [
+  { id: 1, name: 'Çiz ve Tahmin (Klasik)' },
+  { id: 2, name: 'Ortak alan ' },
+  { id: 3, name: 'vs' },
+];
 const GameSettingsForm: React.FC<GameSettingsFormProps> = ({
   settings,
   onSettingChange,
   onStartGame,
-  onUpdatedSetting,
+  onUpdateGameMode,
   isHost,
 }) => {
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleChange = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
+  ) => {
     const { name, value } = e.target;
-    // value'nun sayı olduğundan emin olalım
     const numericValue = parseInt(value, 10);
-    // isNaN kontrolü yapabiliriz
-    if (!isNaN(numericValue)) {
+
+    // Oyun Modu seçimi için özel işlem
+    if (name === 'game_mode_id') {
+      if (!isNaN(numericValue)) {
+        onUpdateGameMode(numericValue);
+      }
+    }
+    // Diğer ayarlar için genel işlem
+    else if (!isNaN(numericValue)) {
       onSettingChange(name as keyof GameSettings, numericValue);
     }
   };
@@ -63,7 +77,37 @@ const GameSettingsForm: React.FC<GameSettingsFormProps> = ({
       />
     </div>
   );
-
+  const GameModeSelect: React.FC = () => (
+    <div className="flex flex-col md:col-span-2">
+      <label
+        htmlFor="game_mode_id"
+        className="text-sm font-medium text-gray-700 mb-1"
+      >
+        Oyun Modu Seçimi
+      </label>
+      <select
+        id="game_mode_id"
+        name="game_mode_id"
+        value={settings.game_mode_id || 1} // Varsayılan 1
+        onChange={handleChange}
+        disabled={!isHost}
+        className={`p-2 border rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 transition duration-150 ${
+          isHost ? 'bg-white' : 'bg-gray-100 cursor-not-allowed'
+        }`}
+      >
+        {GAME_MODES.map((mode) => (
+          <option key={mode.id} value={mode.id}>
+            {mode.name}
+          </option>
+        ))}
+      </select>
+      <p className="text-xs text-gray-500 mt-1">
+        {settings.game_mode_id === 2
+          ? 'Kısa sürede çizim gerektirir.'
+          : 'Standart çizim ve tahmin modu.'}
+      </p>
+    </div>
+  );
   return (
     <div className="p-6 bg-white rounded-xl shadow-lg border border-indigo-100">
       <h2 className="text-2xl font-bold text-indigo-700 mb-4 border-b pb-2">
@@ -81,6 +125,7 @@ const GameSettingsForm: React.FC<GameSettingsFormProps> = ({
       )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+        <GameModeSelect />
         <InputGroup
           label="Toplam Tur Sayısı"
           name="total_rounds"
@@ -126,17 +171,6 @@ const GameSettingsForm: React.FC<GameSettingsFormProps> = ({
           }`}
         >
           {isHost ? 'OYUNU BAŞLAT! 🚀' : 'BAŞLAMASI BEKLENİYOR...'}
-        </button>
-        <button
-          onClick={onUpdatedSetting}
-          disabled={!isHost}
-          className={`w-full px-8 mt-4 py-3 font-bold rounded-xl shadow-lg transition-all duration-200 transform ${
-            isHost
-              ? 'bg-indigo-600 text-white hover:bg-indigo-700 hover:scale-[1.02] active:scale-[0.98]'
-              : 'bg-gray-400 text-gray-700 cursor-not-allowed'
-          }`}
-        >
-          {isHost ? 'Setting Uptdated🚀' : 'BAŞLAMASI BEKLENİYOR...'}
         </button>
       </div>
     </div>
