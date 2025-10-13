@@ -229,7 +229,7 @@ const Canvas: FC<CanvasProps> = (props) => {
   }, [canvasRef, role]);
 
   useEffect(() => {
-    if (!roomDrawData || !Tool.ctx || role === 'drawer') {
+    if (!roomDrawData || !Tool.ctx) {
       return;
     }
 
@@ -394,7 +394,7 @@ const Canvas: FC<CanvasProps> = (props) => {
     };
 
     processRemoteDraw();
-  }, [roomDrawData, role, snapshot]);
+  }, [roomDrawData, snapshot]);
 
   const createRemoteToolInstance = (action: any): Tool | null => {
     switch (action.toolType) {
@@ -531,20 +531,139 @@ const Canvas: FC<CanvasProps> = (props) => {
   };
 
   const onTouchStart = (event: TouchEvent) => {
-    if (tool) {
+    // Mobil cihazlarda varsayılan kaydırma/yakınlaştırmayı engellemek iyi bir uygulamadır.
+    // Ancak sadece başlangıçta değil, `onTouchMove` içinde de gerekebilir.
+    // event.preventDefault();
+
+    const canvas = canvasRef.current;
+
+    // Sadece 'drawer' rolündeysek ve araç tanımlıysa çalışsın
+    if (role === 'drawer' && tool && canvas) {
+      // 🔑 Önemli: Dokunma koordinatlarını al.
+      // Dokunmatik olaylarda genellikle birden fazla dokunma olabilir,
+      // bu yüzden ilk dokunmayı (`touches[0]`) kullanırız.
+      const touch = event.touches[0];
+
+      // Canvas'ın sayfadaki konumunu al
+      const rect = canvas.getBoundingClientRect();
+
+      // Sayfa koordinatlarından (clientX/Y) Canvas içi pozisyonu hesapla
+      // Bu, `onMouseDown`'daki `event.offsetX/Y`'nin karşılığıdır.
+      const x = touch.clientX - rect.left;
+      const y = touch.clientY - rect.top;
+
+      // Normalize koordinat hesapla (0-1 arası)
+      const normX = x / rect.width;
+      const normY = y / rect.height;
+
+      // Kullanılacak rengi belirle
+      const colorToSend = toolType === ToolValue.ERASER ? subColor : mainColor;
+
+      // Aracı dokunma olayıyla güncelle
       tool.onTouchStart(event);
+
+      // Sunucuya çizim başlangıç mesajını gönder
+      props.sendMessage({
+        type: 'canvas_action',
+        content: {
+          type: 'canvas_action',
+          function: 'draw_start',
+          normX: normX,
+          normY: normY,
+          toolType: props.toolType,
+          color: colorToSend,
+          shapeType:
+            props.toolType === ToolValue.SHAPE ? props.shapeType : undefined,
+          shapeOutlineType:
+            props.toolType === ToolValue.SHAPE
+              ? props.shapeOutlineType
+              : undefined,
+          lineWidth: Tool.lineWidthFactor,
+        },
+      });
     }
   };
 
   const onTouchMove = (event: TouchEvent) => {
-    if (tool) {
+    if (role === 'drawer' && tool) {
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+
+      const colorToSend = toolType === ToolValue.ERASER ? subColor : mainColor;
+      const touch = event.touches[0];
+
+      // Canvas'ın sayfadaki konumunu al
+      const rect = canvas.getBoundingClientRect();
+
+      // Sayfa koordinatlarından (clientX/Y) Canvas içi pozisyonu hesapla
+      // Bu, `onMouseDown`'daki `event.offsetX/Y`'nin karşılığıdır.
+      const x = touch.clientX - rect.left;
+      const y = touch.clientY - rect.top;
+
+      // Normalize koordinat hesapla (0-1 arası)
+      const normX = x / rect.width;
+      const normY = y / rect.height;
       tool.onTouchMove(event);
+      props.sendMessage({
+        type: 'canvas_action',
+        content: {
+          type: 'canvas_action',
+          function: 'draw_move',
+          normX: normX,
+          normY: normY,
+          toolType: props.toolType,
+          color: colorToSend,
+          lineWidth: Tool.lineWidthFactor,
+          shapeType:
+            props.toolType === ToolValue.SHAPE ? props.shapeType : undefined,
+          shapeOutlineType:
+            props.toolType === ToolValue.SHAPE
+              ? props.shapeOutlineType
+              : undefined,
+        },
+      });
     }
   };
 
   const onTouchEnd = (event: TouchEvent) => {
-    if (tool) {
+    if (role === 'drawer' && tool) {
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+
+      const colorToSend = toolType === ToolValue.ERASER ? subColor : mainColor;
+      const touch = event.touches[0];
+
+      // Canvas'ın sayfadaki konumunu al
+      const rect = canvas.getBoundingClientRect();
+
+      // Sayfa koordinatlarından (clientX/Y) Canvas içi pozisyonu hesapla
+      // Bu, `onMouseDown`'daki `event.offsetX/Y`'nin karşılığıdır.
+      const x = touch.clientX - rect.left;
+      const y = touch.clientY - rect.top;
+
+      // Normalize koordinat hesapla (0-1 arası)
+      const normX = x / rect.width;
+      const normY = y / rect.height;
       tool.onTouchEnd(event);
+
+      props.sendMessage({
+        type: 'canvas_action',
+        content: {
+          type: 'canvas_action',
+          function: 'draw_end',
+          normX: normX,
+          normY: normY,
+          toolType: props.toolType,
+          color: colorToSend,
+          lineWidth: Tool.lineWidthFactor,
+          shapeType:
+            props.toolType === ToolValue.SHAPE ? props.shapeType : undefined,
+          shapeOutlineType:
+            props.toolType === ToolValue.SHAPE
+              ? props.shapeOutlineType
+              : undefined,
+        },
+      });
     }
     snapshot.add(
       Tool.ctx.getImageData(0, 0, Tool.ctx.canvas.width, Tool.ctx.canvas.height)

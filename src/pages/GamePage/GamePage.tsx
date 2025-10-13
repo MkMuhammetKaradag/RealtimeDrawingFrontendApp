@@ -8,6 +8,7 @@ import { useAppSelector } from '../../store/hooks.ts';
 import { selectUser } from '../../store/slices/authSlice.ts';
 import GameSettingsForm from '../../components/game/GameSettingsForm.tsx';
 import { updateGameMode } from '../../services/game.service.ts';
+import { formToJSON } from 'axios';
 // Yeni bileşeni import et
 
 // Ayar türlerini tanımlayalım (Backend'den beklenen format)
@@ -202,8 +203,12 @@ const GamePage: React.FC = () => {
 
         if (data.state === 'in_progress') {
           setGameStatus('started');
-          const currentDrawerId = data.mode_data.CurrentDrawer;
-          setRole(currentDrawerId === myId ? 'drawer' : 'guesser');
+          if (data.mode_id == '1') {
+            const currentDrawerId = data.mode_data.CurrentDrawer;
+            setRole(currentDrawerId === myId ? 'drawer' : 'guesser');
+          } else {
+            setRole('drawer');
+          }
         } else if (data.state === 'finished' || data.state === 'over') {
           setGameStatus('idle');
           setRole(null);
