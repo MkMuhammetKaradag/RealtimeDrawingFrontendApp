@@ -169,7 +169,7 @@ const getVertexs = (
 
 // Tool sınıfından miras alan Shape sınıfı
 class Shape extends Tool {
-  private type: ShapeToolType; // Bu örneğin çizdiği şekil türü
+  public type: ShapeToolType; // Bu örneğin çizdiği şekil türü
   private saveImageData?: ImageData; // Şekil çizilmeden önceki Canvas görüntüsü
   private isMouseDown = false; // Farenin/Dokunmanın basılı olup olmadığı
   private mouseDownPos = { x: 0, y: 0 }; // Farenin/Dokunmanın başlangıç konumu

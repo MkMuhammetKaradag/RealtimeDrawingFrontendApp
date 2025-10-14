@@ -65,6 +65,14 @@ class Snapshot {
       ? this.imageData1[this.imageData1.length - 1]
       : null;
   }
+
+  /**
+   * Geçerli Canvas anlık görüntüsünü (en son kaydedilen durumu) döndürür.
+   * Bu getter zaten var, sadece ismi current.
+   */
+  public getLatestImageData() {
+    return this.imageData1[this.imageData1.length - 1] || null;
+  }
 }
 
 export default Snapshot;

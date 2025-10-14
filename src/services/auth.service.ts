@@ -1,13 +1,13 @@
 // src/services/auth.service.ts
 
-import axios from 'axios';
+;
 import type {
   LoginCredentials,
   RegisterCredentials,
   AuthResponse,
 } from '../types/store';
 
-import { forceLogout } from '../store/slices/authSlice';
+
 import { api } from './service';
 
 // Axios'tan bir instance oluştur, böylece daha sonra header'lara token eklemek kolay olur

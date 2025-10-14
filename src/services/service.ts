@@ -40,6 +40,6 @@ export const setupInterceptors = (store: any) => {
   );
 };
 export const refreshToken = async (): Promise<AuthResponse> => {
-  const response = await api.post('/refresh-token');
+  const response = await api.post('/auth/refresh-token');
   return response.data;
 };

@@ -1,137 +1,352 @@
-import React, { useMemo } from 'react';
-import { useEffect } from 'react';
-import { useRef } from 'react';
+import React, {
+  useRef,
+  useEffect,
+  useState,
+  useCallback,
+  useContext,
+  useMemo,
+} from 'react';
+
+import type { FC } from 'react';
+
+// Types
+
 import type {
   LineWidthType,
   ShapeOutlineType,
   ShapeToolType,
   ToolType,
 } from '../../util/toolType';
+
 import {
   LineWidthValue,
   ShapeOutlineValue,
   ShapeToolValue,
   ToolValue,
 } from '../../util/toolType';
-import type { FC } from 'react';
-import { useState } from 'react';
+
+// Tools
+
 import { Pen, Tool, Eraser, ColorExtract, ColorFill } from '../../util/tool';
+
 import Shape from '../../util/tool/shape';
-import { useContext } from 'react';
+
+// Context & Utilities
+
 import { DispatcherContext } from '../../context';
+
 import {
   CLEAR_EVENT,
   REDO_EVENT,
   UNDO_EVENT,
 } from '../../util/dispatcher/event';
+
 import Snapshot from '../../util/snapshot';
+
 import {
   logCanvasClear,
   logCanvasUndo,
   logCanvasRedo,
   logCanvasResize,
 } from '../../util/logger';
+
 import { getCanvasCursorStyle } from '../../util/cursor/iconToCursor';
+
+// Interfaces
 
 interface CanvasProps {
   sendMessage: (data: any) => void;
+
   role: 'drawer' | 'guesser' | null;
+
   toolType: ToolType;
+
   shapeType: ShapeToolType;
+
   shapeOutlineType: ShapeOutlineType;
+
   lineWidthType: LineWidthType;
+
   mainColor: string;
+
   subColor: string;
+
   setColor: (value: string) => void;
+
   roomDrawData: any;
 }
-type TailwindCursorClass =
-  | 'cursor-crosshair'
-  | 'cursor-grab'
-  | 'cursor-text'
-  | 'cursor-zoom-in';
-const TAILWIND_CURSOR_MAP: Record<ToolType, TailwindCursorClass> = {
-  [ToolValue.PEN]: 'cursor-crosshair',
-  [ToolValue.ERASER]: 'cursor-grab',
-  [ToolValue.COLOR_EXTRACT]: 'cursor-crosshair',
-  [ToolValue.COLOR_FILL]: 'cursor-crosshair',
-  [ToolValue.SHAPE]: 'cursor-crosshair',
-  [ToolValue.TEXT]: 'cursor-text',
-  [ToolValue.MAGNIFYING]: 'cursor-zoom-in',
-};
-export const getCanvasCursorClass = (
-  toolType: ToolType
-): TailwindCursorClass => {
-  // Haritada aracı ara. Eğer toolType geçerli değilse veya
-  // haritada yoksa (ki TypeScript sayesinde olmayacak), varsayılanı kullanır.
-  return TAILWIND_CURSOR_MAP[toolType] ?? 'cursor-crosshair';
-};
-const Canvas: FC<CanvasProps> = (props) => {
-  const {
-    role,
-    toolType,
-    lineWidthType,
-    mainColor,
-    subColor,
-    setColor,
-    shapeType,
-    shapeOutlineType,
-    roomDrawData,
-  } = props;
 
-  const [tool, setTool] = useState<Tool>();
+interface DrawMessage {
+  type: 'canvas_action';
+
+  content: {
+    type: 'canvas_action';
+
+    function:
+      | 'draw_start'
+      | 'draw_move'
+      | 'draw_end'
+      | 'canvas_clear'
+      | 'canvas_Redo'
+      | 'canvas_UNDO';
+
+    normX?: number;
+
+    normY?: number;
+
+    toolType: ToolType;
+
+    color?: string;
+
+    lineWidth?: number;
+
+    shapeType?: ShapeToolType;
+
+    shapeOutlineType?: ShapeOutlineType;
+  };
+}
+
+interface CanvasCoordinates {
+  x: number;
+
+  y: number;
+
+  normX: number;
+
+  normY: number;
+}
+
+// Constants
+
+const LINE_WIDTH_FACTORS = {
+  [LineWidthValue.THIN]: 1,
+
+  [LineWidthValue.MIDDLE]: 2,
+
+  [LineWidthValue.BOLD]: 3,
+
+  [LineWidthValue.MAXBOLD]: 4,
+} as const;
+
+// Utility Functions
+
+const getLineWidthFactor = (type: LineWidthType): number => {
+  return LINE_WIDTH_FACTORS[type] || 1;
+};
+
+const createDummyMouseEvent = (
+  x: number,
+
+  y: number,
+
+  type: string
+): MouseEvent => {
+  return {
+    offsetX: x,
+
+    offsetY: y,
+
+    buttons: 1,
+
+    type,
+
+    clientX: x,
+
+    clientY: y,
+
+    preventDefault: () => {},
+  } as unknown as MouseEvent;
+};
+
+const Canvas: FC<CanvasProps> = ({
+  role,
+
+  toolType,
+
+  lineWidthType,
+
+  mainColor,
+
+  subColor,
+
+  setColor,
+
+  shapeType,
+
+  shapeOutlineType,
+
+  roomDrawData,
+
+  sendMessage,
+}) => {
+  // Refs
+
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const dispatcherContext = useContext(DispatcherContext);
-  const [snapshot] = useState(new Snapshot());
+
+  const toolRef = useRef<Tool>(null);
+
   const remoteToolRef = useRef<Tool | null>(null);
 
+  const isDrawingRef = useRef<boolean>(false);
+
+  const toolTypeRef = useRef(toolType); // toolType için ref
+
+  const isInitializedRef = useRef<boolean>(false);
+
+  const dprRef = useRef<number>(1);
+
+  const canvasSizeRef = useRef<{ width: number; height: number }>({
+    width: 0,
+
+    height: 0,
+  }); // State
+
+  const [snapshot] = useState(() => new Snapshot());
+
+  const dispatcherContext = useContext(DispatcherContext);
+
+  const previousToolTypeRef = useRef<ToolType>(toolType);
+
+  const shouldPreserveCanvasRef = useRef<boolean>(true);
+
+  const getDevicePixelRatio = useCallback((): number => {
+    return window.devicePixelRatio || 1;
+  }, []);
+
+  const scaleCoordinate = useCallback(
+    (coord: number, canvasSize: number, dpr: number): number => {
+      return coord * dpr;
+    },
+
+    []
+  );
+
+  const normalizeCoordinate = useCallback(
+    (coord: number, canvasSize: number, dpr: number): number => {
+      return coord / (canvasSize * dpr);
+    },
+
+    []
+  );
+
+  const getCanvasCoordinates = useCallback(
+    (
+      canvas: HTMLCanvasElement,
+
+      clientX: number,
+
+      clientY: number
+    ): CanvasCoordinates | null => {
+      if (!canvas) return null;
+
+      const rect = canvas.getBoundingClientRect();
+
+      const dpr = dprRef.current; // CSS piksel koordinatları
+
+      const cssX = clientX - rect.left;
+
+      const cssY = clientY - rect.top; // Gerçek canvas koordinatları (DPR ile scale edilmiş)
+
+      const x = scaleCoordinate(cssX, rect.width, dpr);
+
+      const y = scaleCoordinate(cssY, rect.height, dpr); // Normalize koordinatlar (0-1 arası)
+
+      const normX = normalizeCoordinate(cssX, rect.width, 1); // CSS boyutuna göre normalize
+
+      const normY = normalizeCoordinate(cssY, rect.height, 1);
+
+      return { x, y, normX, normY };
+    },
+
+    [scaleCoordinate, normalizeCoordinate]
+  );
+
   useEffect(() => {
+    toolTypeRef.current = toolType;
+  }, [toolType]); // Tool Creation
+
+  const createToolInstance = useCallback((): Tool | undefined => {
+    console.log('Creating new tool instance:', toolType);
+
     switch (toolType) {
       case ToolValue.PEN:
-        setTool(new Pen());
-        break;
+        return new Pen();
+
       case ToolValue.ERASER:
-        setTool(new Eraser());
-        break;
+        return new Eraser();
+
       case ToolValue.COLOR_EXTRACT:
-        setTool(new ColorExtract(setColor));
-        break;
+        return new ColorExtract(setColor);
+
       case ToolValue.COLOR_FILL:
-        setTool(new ColorFill());
-        break;
+        return new ColorFill();
+
       case ToolValue.SHAPE:
-        setTool(
-          new Shape(shapeType, shapeOutlineType === ShapeOutlineValue.DOTTED)
+        return new Shape(
+          shapeType,
+
+          shapeOutlineType === ShapeOutlineValue.DOTTED
         );
-        break;
+
       default:
-        break;
+        return undefined;
     }
   }, [toolType, shapeType, shapeOutlineType, setColor]);
 
-  useEffect(() => {
-    if (tool instanceof Shape) {
-      tool.isDashed = shapeOutlineType === ShapeOutlineValue.DOTTED;
+  const createRemoteToolInstance = useCallback((action: any): Tool | null => {
+    switch (action.toolType) {
+      case ToolValue.PEN:
+        return new Pen();
+
+      case ToolValue.ERASER:
+        return new Eraser();
+
+      case ToolValue.COLOR_FILL:
+        return new ColorFill();
+
+      case ToolValue.SHAPE:
+        const isDashed = action.shapeOutlineType === ShapeOutlineValue.DOTTED;
+
+        return new Shape(action.shapeType, isDashed);
+
+      default:
+        return null;
     }
-  }, [shapeOutlineType]);
+  }, []); // Tool Configuration Effects
 
   useEffect(() => {
-    switch (lineWidthType) {
-      case LineWidthValue.THIN:
-        Tool.lineWidthFactor = 1;
-        break;
-      case LineWidthValue.MIDDLE:
-        Tool.lineWidthFactor = 2;
-        break;
-      case LineWidthValue.BOLD:
-        Tool.lineWidthFactor = 3;
-        break;
-      case LineWidthValue.MAXBOLD:
-        Tool.lineWidthFactor = 4;
-        break;
-      default:
-        break;
+    // Eğer tool değiştiyse ve canvas korunmalıysa
+
+    if (
+      previousToolTypeRef.current !== toolType &&
+      shouldPreserveCanvasRef.current
+    ) {
+      console.log('Tool changed, preserving canvas content');
+
+      const newTool = createToolInstance();
+
+      if (newTool) {
+        toolRef.current = newTool;
+      }
+
+      previousToolTypeRef.current = toolType;
     }
+  }, [toolType, createToolInstance]);
+
+  useEffect(() => {
+    if (toolRef.current instanceof Shape) {
+      // Mevcut shape tool'unun özelliklerini güncelle
+
+      toolRef.current.isDashed = shapeOutlineType === ShapeOutlineValue.DOTTED;
+
+      if (shapeType && toolRef.current.type !== shapeType) {
+        toolRef.current.type = shapeType;
+      }
+    }
+  }, [shapeOutlineType, shapeType]);
+
+  useEffect(() => {
+    Tool.lineWidthFactor = getLineWidthFactor(lineWidthType);
   }, [lineWidthType]);
 
   useEffect(() => {
@@ -140,570 +355,628 @@ const Canvas: FC<CanvasProps> = (props) => {
 
   useEffect(() => {
     Tool.subColor = subColor;
-  }, [subColor]);
+  }, [subColor]); // Canvas Setup
+
+  const setupCanvas = useCallback(
+    (isInitialSetup: boolean = false) => {
+      const canvas = canvasRef.current;
+
+      if (!canvas) return;
+
+      const ctx = canvas.getContext('2d');
+
+      if (!ctx) return;
+
+      const dpr = getDevicePixelRatio();
+
+      dprRef.current = dpr;
+
+      const rect = canvas.getBoundingClientRect();
+
+      const cssWidth = rect.width;
+
+      const cssHeight = rect.height;
+
+      const realWidth = cssWidth * dpr;
+
+      const realHeight = cssHeight * dpr; // Boyut değişikliği kontrolü
+
+      const previousWidth = canvasSizeRef.current.width;
+
+      const previousHeight = canvasSizeRef.current.height; // ✅ DEĞİŞİKLİK: Eğer boyut değişmediyse ve ilk kurulum değilse, canvas'ı ASLA sıfırlama
+
+      if (
+        !isInitialSetup &&
+        previousWidth === realWidth &&
+        previousHeight === realHeight
+      ) {
+        console.log('Canvas size unchanged, skipping setup');
+
+        return;
+      } // ✅ DEĞİŞİKLİK: Canvas state'ini geçici olarak sakla
+
+      const currentImageData = isInitialSetup
+        ? null
+        : ctx.getImageData(0, 0, realWidth, realHeight); // Canvas boyutlarını ayarla
+
+      canvas.width = realWidth;
+
+      canvas.height = realHeight;
+
+      canvasSizeRef.current = { width: realWidth, height: realHeight };
+
+      canvas.style.width = `${cssWidth}px`;
+
+      canvas.style.height = `${cssHeight}px`; // Context'i scale et
+
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+
+      ctx.scale(dpr, dpr); // Tool context'ini ayarla
+
+      Tool.ctx = ctx; // ✅ DEĞİŞİKLİK: SADECE İLK KURULUMDA veya boyut değiştiğinde beyaz temizleme
+
+      if (isInitialSetup || !isInitializedRef.current) {
+        ctx.fillStyle = 'white';
+
+        ctx.fillRect(0, 0, cssWidth, cssHeight);
+
+        isInitializedRef.current = true;
+
+        snapshot.add(ctx.getImageData(0, 0, realWidth, realHeight));
+      } else if (currentImageData) {
+        // ✅ YENİ: Boyut değiştiyse önceki içeriği geri yükle
+
+        ctx.putImageData(currentImageData, 0, 0);
+      }
+
+      console.log(
+        `Canvas Setup - CSS: ${cssWidth}x${cssHeight}, Real: ${realWidth}x${realHeight}, DPR: ${dpr}`
+      );
+    },
+
+    [snapshot, getDevicePixelRatio]
+  );
+
+  useEffect(() => {
+    const initialTool = createToolInstance();
+
+    if (initialTool) {
+      toolRef.current = initialTool;
+
+      previousToolTypeRef.current = toolType;
+    }
+  }, []); // Sadece mount'ta çalışsın // İlk kurulum ve resize observer - DEĞİŞMEDİ
 
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (canvas) {
-      const ctx = canvas.getContext('2d') as CanvasRenderingContext2D;
-      const dpr = window.devicePixelRatio || 1;
-      const rect = canvas.getBoundingClientRect();
 
-      ctx.setTransform(1, 0, 0, 1, 0, 0);
-      canvas.width = rect.width * dpr;
-      canvas.height = rect.height * dpr;
-      ctx.scale(dpr, dpr);
+    if (!canvas) return; // İlk kurulum
 
-      Tool.ctx = ctx;
-      ctx.fillStyle = 'white';
-      ctx.fillRect(0, 0, rect.width, rect.height);
-      snapshot.add(ctx.getImageData(0, 0, canvas.width, canvas.height));
+    setupCanvas(true); // Resize observer
 
-      const dispatcher = dispatcherContext.dispatcher;
+    const resizeObserver = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        if (entry.target === canvas) {
+          // ✅ DEĞİŞİKLİK: Resize sırasında canvas içeriğini koru
 
-      const clearCanvas = () => {
-        console.log('temizleme');
-        const ctx = canvas.getContext('2d');
-        if (ctx) {
-          ctx.fillStyle = 'white';
-          ctx.fillRect(0, 0, canvas.width, canvas.height);
-          logCanvasClear(toolType);
-          props.sendMessage({
-            type: 'canvas_action',
-            content: {
-              type: 'canvas_action',
-              function: 'canvas_clear',
-            },
-          });
+          shouldPreserveCanvasRef.current = true;
+
+          setupCanvas(false);
         }
-      };
-      dispatcher.on(CLEAR_EVENT, clearCanvas);
+      }
+    });
 
-      const forwardAction = () => {
-        const ctx = canvas.getContext('2d');
-        if (ctx) {
-          const imageData = snapshot.forward();
-          if (imageData) {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            ctx.putImageData(imageData, 0, 0);
-            logCanvasRedo(toolType);
-            props.sendMessage({
-              type: 'canvas_action',
-              content: {
-                type: 'canvas_action',
-                function: 'canvas_Redo',
-              },
-            });
-          }
-        }
-      };
-      dispatcher.on(REDO_EVENT, forwardAction);
+    resizeObserver.observe(canvas);
 
-      const back = () => {
-        console.log('NABER');
-        const ctx = canvas.getContext('2d');
-        if (ctx) {
-          const imageData = snapshot.back();
-          if (imageData) {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            ctx.putImageData(imageData, 0, 0);
-            logCanvasUndo(toolType);
-            props.sendMessage({
-              type: 'canvas_action',
-              content: {
-                type: 'canvas_action',
-                function: 'canvas_UNDO',
-              },
-            });
-          }
-        }
-      };
-      dispatcher.on(UNDO_EVENT, back);
+    return () => {
+      resizeObserver.unobserve(canvas);
+    };
+  }, [setupCanvas]); // Canvas setup ve resize observer // Message Sending
 
-      return () => {
-        dispatcher.off(CLEAR_EVENT, clearCanvas);
-        dispatcher.off(UNDO_EVENT, back);
-        dispatcher.off(REDO_EVENT, forwardAction);
+  const sendDrawMessage = useCallback(
+    (
+      action: DrawMessage['content']['function'],
+
+      coordinates?: { normX: number; normY: number }
+    ) => {
+      const message: DrawMessage = {
+        type: 'canvas_action',
+
+        content: {
+          type: 'canvas_action',
+
+          function: action,
+
+          toolType,
+
+          color: toolType === ToolValue.ERASER ? subColor : mainColor,
+
+          lineWidth: Tool.lineWidthFactor,
+
+          ...coordinates,
+
+          ...(toolType === ToolValue.SHAPE && {
+            shapeType,
+
+            shapeOutlineType,
+          }),
+        },
       };
+
+      sendMessage(message);
+    },
+
+    [toolType, shapeType, shapeOutlineType, mainColor, subColor, sendMessage]
+  ); // Canvas Actions
+
+  const clearCanvas = useCallback(() => {
+    const canvas = canvasRef.current;
+
+    const ctx = Tool.ctx;
+
+    if (!canvas || !ctx) return;
+
+    const rect = canvas.getBoundingClientRect();
+
+    const dpr = dprRef.current; // CSS boyutlarında temizle
+
+    ctx.fillStyle = 'white';
+
+    ctx.fillRect(0, 0, rect.width, rect.height);
+
+    logCanvasClear(toolType);
+
+    sendDrawMessage('canvas_clear');
+
+    snapshot.add(ctx.getImageData(0, 0, canvas.width, canvas.height));
+  }, [toolType, sendDrawMessage, snapshot]);
+
+  const handleUndo = useCallback(() => {
+    const ctx = Tool.ctx;
+
+    if (!ctx) return;
+
+    const imageData = snapshot.back();
+
+    if (imageData) {
+      ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+
+      ctx.putImageData(imageData, 0, 0);
+
+      logCanvasUndo(toolType);
+
+      sendDrawMessage('canvas_UNDO');
     }
-  }, [canvasRef, role]);
+  }, [toolType, sendDrawMessage, snapshot]);
 
-  useEffect(() => {
-    if (!roomDrawData || !Tool.ctx) {
-      return;
+  const handleRedo = useCallback(() => {
+    const ctx = Tool.ctx;
+
+    if (!ctx) return;
+
+    const imageData = snapshot.forward();
+
+    if (imageData) {
+      ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+
+      ctx.putImageData(imageData, 0, 0);
+
+      logCanvasRedo(toolType);
+
+      sendDrawMessage('canvas_Redo');
     }
+  }, [toolType, sendDrawMessage, snapshot]); // Event Handlers
 
-    const processRemoteDraw = async () => {
+  const handleDrawStart = useCallback(
+    (x: number, y: number, normX: number, normY: number) => {
+      if (!toolRef.current || role !== 'drawer') return; // DPR'ye göre scale edilmiş koordinatları kullan
+
+      const event = createDummyMouseEvent(x, y, 'mousedown');
+
+      toolRef.current.onMouseDown(event);
+
+      isDrawingRef.current = true;
+
+      sendDrawMessage('draw_start', { normX, normY });
+    },
+
+    [role, sendDrawMessage]
+  );
+
+  const handleDrawMove = useCallback(
+    (x: number, y: number, normX: number, normY: number) => {
+      if (!toolRef.current || !isDrawingRef.current) return;
+
+      const event = createDummyMouseEvent(x, y, 'mousemove');
+
+      toolRef.current.onMouseMove(event);
+
+      sendDrawMessage('draw_move', { normX, normY });
+    },
+
+    [sendDrawMessage]
+  );
+
+  const handleDrawEnd = useCallback(
+    (x: number, y: number, normX: number, normY: number) => {
+      if (!toolRef.current || !isDrawingRef.current) return;
+
+      const event = createDummyMouseEvent(x, y, 'mouseup');
+
+      toolRef.current.onMouseUp(event);
+
+      isDrawingRef.current = false;
+
+      sendDrawMessage('draw_end', { normX, normY }); // Çizim tamamlandığında snapshot'a ekle
+
+      const ctx = Tool.ctx;
+
+      if (ctx) {
+        snapshot.add(
+          ctx.getImageData(0, 0, ctx.canvas.width, ctx.canvas.height)
+        );
+      }
+    },
+
+    [sendDrawMessage, snapshot]
+  ); // MOUSE EVENT HANDLERS - Güncellenmiş
+
+  const onMouseDown = useCallback(
+    (event: MouseEvent) => {
       const canvas = canvasRef.current;
+
       if (!canvas) return;
 
-      const {
-        function: actionType,
-        toolType: remoteToolType,
-        normX, // Normalize koordinat
-        normY, // Normalize koordinat
-        color,
-        lineWidth,
-        shapeType: remoteShapeType,
-        shapeOutlineType: remoteShapeOutlineType,
-      } = roomDrawData.content;
+      const coords = getCanvasCoordinates(canvas, event.clientX, event.clientY);
 
-      // Normalize koordinatları gerçek piksel değerine çevir
-      const rect = canvas.getBoundingClientRect();
-      const x = normX * rect.width;
-      const y = normY * rect.height;
+      if (!coords) return;
 
-      const originalMainColor = Tool.mainColor;
-      const originalLineWidthFactor = Tool.lineWidthFactor;
+      const { x, y, normX, normY } = coords;
 
-      Tool.mainColor = color;
-      Tool.lineWidthFactor = lineWidth;
+      handleDrawStart(x, y, normX, normY);
+    },
 
-      const dummyEvent: MouseEvent = {
-        offsetX: x,
-        offsetY: y,
-        buttons: 1,
-        type: actionType,
-        clientX: x,
-        clientY: y,
-        preventDefault: () => {},
-      } as MouseEvent;
+    [handleDrawStart, getCanvasCoordinates]
+  );
+
+  const onMouseMove = useCallback(
+    (event: MouseEvent) => {
+      const canvas = canvasRef.current;
+
+      if (!canvas) return;
+
+      const coords = getCanvasCoordinates(canvas, event.clientX, event.clientY);
+
+      if (!coords) return;
+
+      const { x, y, normX, normY } = coords;
+
+      handleDrawMove(x, y, normX, normY);
+    },
+
+    [handleDrawMove, getCanvasCoordinates]
+  );
+
+  const onMouseUp = useCallback(
+    (event: MouseEvent) => {
+      const canvas = canvasRef.current;
+
+      if (!canvas) return;
+
+      const coords = getCanvasCoordinates(canvas, event.clientX, event.clientY);
+
+      if (!coords) return;
+
+      const { x, y, normX, normY } = coords;
+
+      handleDrawEnd(x, y, normX, normY);
+    },
+
+    [handleDrawEnd, getCanvasCoordinates]
+  ); // TOUCH EVENT HANDLERS - Güncellenmiş
+
+  const onTouchStart = useCallback(
+    (event: TouchEvent) => {
+      event.preventDefault();
+
+      const canvas = canvasRef.current;
+
+      if (!canvas) return;
+
+      const touch = event.touches[0];
+
+      const coords = getCanvasCoordinates(canvas, touch.clientX, touch.clientY);
+
+      if (!coords) return;
+
+      const { x, y, normX, normY } = coords;
+
+      handleDrawStart(x, y, normX, normY);
+    },
+
+    [handleDrawStart, getCanvasCoordinates]
+  );
+
+  const onTouchMove = useCallback(
+    (event: TouchEvent) => {
+      event.preventDefault();
+
+      const canvas = canvasRef.current;
+
+      if (!canvas) return;
+
+      const touch = event.touches[0];
+
+      const coords = getCanvasCoordinates(canvas, touch.clientX, touch.clientY);
+
+      if (!coords) return;
+
+      const { x, y, normX, normY } = coords;
+
+      handleDrawMove(x, y, normX, normY);
+    },
+
+    [handleDrawMove, getCanvasCoordinates]
+  );
+
+  const onTouchEnd = useCallback(
+    (event: TouchEvent) => {
+      event.preventDefault();
+
+      const canvas = canvasRef.current;
+
+      if (!canvas) return;
+
+      const touch = event.changedTouches[0];
+
+      const coords = getCanvasCoordinates(canvas, touch.clientX, touch.clientY);
+
+      if (!coords) return;
+
+      const { x, y, normX, normY } = coords;
+
+      handleDrawEnd(x, y, normX, normY);
+    },
+
+    [handleDrawEnd, getCanvasCoordinates]
+  ); // Remote Drawing Processing
+
+  const processRemoteDraw = useCallback(() => {
+    if (!roomDrawData || !Tool.ctx || !canvasRef.current) return;
+
+    const canvas = canvasRef.current;
+
+    const {
+      function: actionType,
+
+      normX,
+
+      normY,
+
+      color,
+
+      lineWidth,
+
+      toolType: remoteToolType,
+
+      shapeType: remoteShapeType,
+
+      shapeOutlineType: remoteShapeOutlineType,
+    } = roomDrawData.content;
+
+    const rect = canvas.getBoundingClientRect();
+
+    const dpr = dprRef.current; // Normalize koordinatları gerçek canvas koordinatlarına çevir
+
+    const cssX = normX * rect.width;
+
+    const cssY = normY * rect.height;
+
+    const x = scaleCoordinate(cssX, rect.width, dpr);
+
+    const y = scaleCoordinate(cssY, rect.height, dpr); // Orijinal state'i sakla
+
+    const originalState = {
+      mainColor: Tool.mainColor,
+
+      lineWidthFactor: Tool.lineWidthFactor,
+    }; // Remote state'i uygula
+
+    Tool.mainColor = color;
+
+    Tool.lineWidthFactor = lineWidth;
+
+    try {
+      const dummyEvent = createDummyMouseEvent(x, y, actionType);
 
       switch (actionType) {
         case 'draw_start':
           remoteToolRef.current = createRemoteToolInstance(
             roomDrawData.content
           );
+
           if (remoteToolRef.current) {
             remoteToolRef.current.onMouseDown(dummyEvent);
-            remoteToolRef.current.lastX = x;
-            remoteToolRef.current.lastY = y;
           }
+
           break;
+
         case 'draw_move':
-          if (remoteToolRef.current && remoteToolRef.current.isDrawing) {
-            const lastX =
-              remoteToolRef.current.lastX !== null
-                ? remoteToolRef.current.lastX
-                : x;
-            const lastY =
-              remoteToolRef.current.lastY !== null
-                ? remoteToolRef.current.lastY
-                : y;
-
-            if (
-              (remoteToolRef.current instanceof Pen ||
-                remoteToolRef.current instanceof Eraser) &&
-              lastX !== undefined &&
-              lastY !== undefined
-            ) {
-              const ctx = Tool.ctx;
-              ctx.beginPath();
-              ctx.moveTo(lastX, lastY);
-              ctx.lineTo(x, y);
-              ctx.strokeStyle = Tool.mainColor;
-              ctx.lineWidth = Tool.baseLineWidth * Tool.lineWidthFactor;
-              ctx.lineCap = 'round';
-              ctx.lineJoin = 'round';
-              ctx.stroke();
-              ctx.closePath();
-            } else {
-              remoteToolRef.current.onMouseMove(dummyEvent);
-            }
-
-            remoteToolRef.current.lastX = x;
-            remoteToolRef.current.lastY = y;
+          if (remoteToolRef.current?.isDrawing) {
+            remoteToolRef.current.onMouseMove(dummyEvent);
           }
+
           break;
+
         case 'draw_end':
           if (remoteToolRef.current) {
-            if (
-              remoteToolRef.current instanceof Pen ||
-              remoteToolRef.current instanceof Eraser
-            ) {
-              const lastX =
-                remoteToolRef.current.lastX !== null
-                  ? remoteToolRef.current.lastX
-                  : x;
-              const lastY =
-                remoteToolRef.current.lastY !== null
-                  ? remoteToolRef.current.lastY
-                  : y;
-              if (lastX !== x || lastY !== y) {
-                const ctx = Tool.ctx;
-                ctx.beginPath();
-                ctx.moveTo(lastX, lastY);
-                ctx.lineTo(x, y);
-                ctx.strokeStyle = Tool.mainColor;
-                ctx.lineWidth = Tool.baseLineWidth * Tool.lineWidthFactor;
-                ctx.lineCap = 'round';
-                ctx.lineJoin = 'round';
-                ctx.stroke();
-                ctx.closePath();
-              }
-            } else {
-              remoteToolRef.current.onMouseUp(dummyEvent);
-            }
+            remoteToolRef.current.onMouseUp(dummyEvent);
 
             snapshot.add(
               Tool.ctx.getImageData(
                 0,
+
                 0,
+
                 Tool.ctx.canvas.width,
+
                 Tool.ctx.canvas.height
               )
             );
+
             remoteToolRef.current = null;
           }
+
           break;
-        case 'canvas_clear':
-          const ctx = Tool.ctx;
-          ctx.fillStyle = 'white';
-          ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+
+        case 'canvas_clear': // Clear canvas fonksiyonu aşağıda güncellendi
+          clearCanvas();
+
           break;
+
         case 'canvas_Redo':
-          const redoImageData = snapshot.forward();
-          if (redoImageData) {
-            Tool.ctx.clearRect(
-              0,
-              0,
-              Tool.ctx.canvas.width,
-              Tool.ctx.canvas.height
-            );
-            Tool.ctx.putImageData(redoImageData, 0, 0);
-          }
+          handleRedo();
+
           break;
+
         case 'canvas_UNDO':
-          const undoImageData = snapshot.back();
-          if (undoImageData) {
-            Tool.ctx.clearRect(
-              0,
-              0,
-              Tool.ctx.canvas.width,
-              Tool.ctx.canvas.height
-            );
-            Tool.ctx.putImageData(undoImageData, 0, 0);
-          }
+          handleUndo();
+
           break;
+
         default:
-          break;
+          console.warn('Unknown remote action:', actionType);
       }
+    } catch (error) {
+      console.error('Error processing remote draw:', error);
+    } finally {
+      // Orijinal state'i geri yükle
 
-      Tool.mainColor = originalMainColor;
-      Tool.lineWidthFactor = originalLineWidthFactor;
-    };
+      Tool.mainColor = originalState.mainColor;
 
-    processRemoteDraw();
-  }, [roomDrawData, snapshot]);
-
-  const createRemoteToolInstance = (action: any): Tool | null => {
-    switch (action.toolType) {
-      case ToolValue.PEN:
-        return new Pen();
-      case ToolValue.ERASER:
-        return new Eraser();
-      case ToolValue.COLOR_FILL:
-        return new ColorFill();
-      case ToolValue.SHAPE:
-        const isDashed = action.shapeOutlineType === ShapeOutlineValue.DOTTED;
-        return new Shape(action.shapeType, isDashed);
-      default:
-        return null;
+      Tool.lineWidthFactor = originalState.lineWidthFactor;
     }
-  };
+  }, [
+    roomDrawData,
 
-  const onMouseDown = (event: MouseEvent) => {
-    const canvas = canvasRef.current;
-    if (role === 'drawer' && tool && canvas) {
-      const colorToSend = toolType === ToolValue.ERASER ? subColor : mainColor;
-      const rect = canvas.getBoundingClientRect();
+    createRemoteToolInstance,
 
-      // Canvas içindeki pozisyon (offsetX/Y kullan)
-      const x = event.offsetX;
-      const y = event.offsetY;
+    clearCanvas,
 
-      // Normalize koordinat hesapla (0-1 arası)
-      const normX = x / rect.width;
-      const normY = y / rect.height;
+    handleUndo,
 
-      tool.onMouseDown(event);
+    handleRedo,
 
-      props.sendMessage({
-        type: 'canvas_action',
-        content: {
-          type: 'canvas_action',
-          function: 'draw_start',
-          normX: normX,
-          normY: normY,
-          toolType: props.toolType,
-          color: colorToSend,
-          shapeType:
-            props.toolType === ToolValue.SHAPE ? props.shapeType : undefined,
-          shapeOutlineType:
-            props.toolType === ToolValue.SHAPE
-              ? props.shapeOutlineType
-              : undefined,
-          lineWidth: Tool.lineWidthFactor,
-        },
-      });
-    }
-  };
+    snapshot,
 
-  const onMouseMove = (event: MouseEvent) => {
-    if (role === 'drawer' && tool && tool.isDrawing) {
-      const canvas = canvasRef.current;
-      if (!canvas) return;
-
-      tool.onMouseMove(event);
-
-      const colorToSend = toolType === ToolValue.ERASER ? subColor : mainColor;
-      const rect = canvas.getBoundingClientRect();
-
-      const x = event.offsetX;
-      const y = event.offsetY;
-      const normX = x / rect.width;
-      const normY = y / rect.height;
-
-      props.sendMessage({
-        type: 'canvas_action',
-        content: {
-          type: 'canvas_action',
-          function: 'draw_move',
-          normX: normX,
-          normY: normY,
-          toolType: props.toolType,
-          color: colorToSend,
-          lineWidth: Tool.lineWidthFactor,
-          shapeType:
-            props.toolType === ToolValue.SHAPE ? props.shapeType : undefined,
-          shapeOutlineType:
-            props.toolType === ToolValue.SHAPE
-              ? props.shapeOutlineType
-              : undefined,
-        },
-      });
-    }
-  };
-
-  const onMouseUp = (event: MouseEvent) => {
-    if (role === 'drawer' && tool) {
-      const canvas = canvasRef.current;
-      if (!canvas) return;
-
-      tool.onMouseUp(event);
-
-      const colorToSend = toolType === ToolValue.ERASER ? subColor : mainColor;
-      const rect = canvas.getBoundingClientRect();
-
-      const x = event.offsetX;
-      const y = event.offsetY;
-      const normX = x / rect.width;
-      const normY = y / rect.height;
-
-      props.sendMessage({
-        type: 'canvas_action',
-        content: {
-          type: 'canvas_action',
-          function: 'draw_end',
-          normX: normX,
-          normY: normY,
-          toolType: props.toolType,
-          color: colorToSend,
-          lineWidth: Tool.lineWidthFactor,
-          shapeType:
-            props.toolType === ToolValue.SHAPE ? props.shapeType : undefined,
-          shapeOutlineType:
-            props.toolType === ToolValue.SHAPE
-              ? props.shapeOutlineType
-              : undefined,
-        },
-      });
-
-      snapshot.add(
-        Tool.ctx.getImageData(
-          0,
-          0,
-          Tool.ctx.canvas.width,
-          Tool.ctx.canvas.height
-        )
-      );
-    }
-  };
-
-  const onTouchStart = (event: TouchEvent) => {
-    // Mobil cihazlarda varsayılan kaydırma/yakınlaştırmayı engellemek iyi bir uygulamadır.
-    // Ancak sadece başlangıçta değil, `onTouchMove` içinde de gerekebilir.
-    // event.preventDefault();
-
-    const canvas = canvasRef.current;
-
-    // Sadece 'drawer' rolündeysek ve araç tanımlıysa çalışsın
-    if (role === 'drawer' && tool && canvas) {
-      // 🔑 Önemli: Dokunma koordinatlarını al.
-      // Dokunmatik olaylarda genellikle birden fazla dokunma olabilir,
-      // bu yüzden ilk dokunmayı (`touches[0]`) kullanırız.
-      const touch = event.touches[0];
-
-      // Canvas'ın sayfadaki konumunu al
-      const rect = canvas.getBoundingClientRect();
-
-      // Sayfa koordinatlarından (clientX/Y) Canvas içi pozisyonu hesapla
-      // Bu, `onMouseDown`'daki `event.offsetX/Y`'nin karşılığıdır.
-      const x = touch.clientX - rect.left;
-      const y = touch.clientY - rect.top;
-
-      // Normalize koordinat hesapla (0-1 arası)
-      const normX = x / rect.width;
-      const normY = y / rect.height;
-
-      // Kullanılacak rengi belirle
-      const colorToSend = toolType === ToolValue.ERASER ? subColor : mainColor;
-
-      // Aracı dokunma olayıyla güncelle
-      tool.onTouchStart(event);
-
-      // Sunucuya çizim başlangıç mesajını gönder
-      props.sendMessage({
-        type: 'canvas_action',
-        content: {
-          type: 'canvas_action',
-          function: 'draw_start',
-          normX: normX,
-          normY: normY,
-          toolType: props.toolType,
-          color: colorToSend,
-          shapeType:
-            props.toolType === ToolValue.SHAPE ? props.shapeType : undefined,
-          shapeOutlineType:
-            props.toolType === ToolValue.SHAPE
-              ? props.shapeOutlineType
-              : undefined,
-          lineWidth: Tool.lineWidthFactor,
-        },
-      });
-    }
-  };
-
-  const onTouchMove = (event: TouchEvent) => {
-    if (role === 'drawer' && tool) {
-      const canvas = canvasRef.current;
-      if (!canvas) return;
-
-      const colorToSend = toolType === ToolValue.ERASER ? subColor : mainColor;
-      const touch = event.touches[0];
-
-      // Canvas'ın sayfadaki konumunu al
-      const rect = canvas.getBoundingClientRect();
-
-      // Sayfa koordinatlarından (clientX/Y) Canvas içi pozisyonu hesapla
-      // Bu, `onMouseDown`'daki `event.offsetX/Y`'nin karşılığıdır.
-      const x = touch.clientX - rect.left;
-      const y = touch.clientY - rect.top;
-
-      // Normalize koordinat hesapla (0-1 arası)
-      const normX = x / rect.width;
-      const normY = y / rect.height;
-      tool.onTouchMove(event);
-      props.sendMessage({
-        type: 'canvas_action',
-        content: {
-          type: 'canvas_action',
-          function: 'draw_move',
-          normX: normX,
-          normY: normY,
-          toolType: props.toolType,
-          color: colorToSend,
-          lineWidth: Tool.lineWidthFactor,
-          shapeType:
-            props.toolType === ToolValue.SHAPE ? props.shapeType : undefined,
-          shapeOutlineType:
-            props.toolType === ToolValue.SHAPE
-              ? props.shapeOutlineType
-              : undefined,
-        },
-      });
-    }
-  };
-
-  const onTouchEnd = (event: TouchEvent) => {
-    if (role === 'drawer' && tool) {
-      const canvas = canvasRef.current;
-      if (!canvas) return;
-
-      const colorToSend = toolType === ToolValue.ERASER ? subColor : mainColor;
-      const touch = event.touches[0];
-
-      // Canvas'ın sayfadaki konumunu al
-      const rect = canvas.getBoundingClientRect();
-
-      // Sayfa koordinatlarından (clientX/Y) Canvas içi pozisyonu hesapla
-      // Bu, `onMouseDown`'daki `event.offsetX/Y`'nin karşılığıdır.
-      const x = touch.clientX - rect.left;
-      const y = touch.clientY - rect.top;
-
-      // Normalize koordinat hesapla (0-1 arası)
-      const normX = x / rect.width;
-      const normY = y / rect.height;
-      tool.onTouchEnd(event);
-
-      props.sendMessage({
-        type: 'canvas_action',
-        content: {
-          type: 'canvas_action',
-          function: 'draw_end',
-          normX: normX,
-          normY: normY,
-          toolType: props.toolType,
-          color: colorToSend,
-          lineWidth: Tool.lineWidthFactor,
-          shapeType:
-            props.toolType === ToolValue.SHAPE ? props.shapeType : undefined,
-          shapeOutlineType:
-            props.toolType === ToolValue.SHAPE
-              ? props.shapeOutlineType
-              : undefined,
-        },
-      });
-    }
-    snapshot.add(
-      Tool.ctx.getImageData(0, 0, Tool.ctx.canvas.width, Tool.ctx.canvas.height)
-    );
-  };
+    scaleCoordinate,
+  ]); // Effects
 
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (canvas) {
-      canvas.addEventListener('mousedown', onMouseDown);
-      canvas.addEventListener('mousemove', onMouseMove);
-      canvas.addEventListener('mouseup', onMouseUp);
-      canvas.addEventListener('touchstart', onTouchStart);
-      canvas.addEventListener('touchmove', onTouchMove);
-      canvas.addEventListener('touchend', onTouchEnd);
 
-      return () => {
-        canvas.removeEventListener('mousedown', onMouseDown);
-        canvas.removeEventListener('mousemove', onMouseMove);
-        canvas.removeEventListener('mouseup', onMouseUp);
-        canvas.removeEventListener('touchstart', onTouchStart);
-        canvas.removeEventListener('touchmove', onTouchMove);
-        canvas.removeEventListener('touchend', onTouchEnd);
-      };
-    }
-  }, [canvasRef, onMouseDown, onMouseMove, onMouseUp]);
+    if (!canvas) return; // İlk kurulum
 
-  const cursorStyleValue = useMemo(() => {
-    // Hem aracı hem de dinamik rengi fonksiyona iletiyoruz
+    setupCanvas(); // Boyut değişikliklerini izle
+
+    const resizeObserver = new ResizeObserver(() => {
+      setupCanvas();
+    });
+
+    resizeObserver.observe(canvas);
+
+    return () => {
+      resizeObserver.unobserve(canvas);
+    };
+  }, [setupCanvas]);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+
+    if (!canvas) return; // Add event listeners
+
+    const events = [
+      { type: 'mousedown', handler: onMouseDown },
+
+      { type: 'mousemove', handler: onMouseMove },
+
+      { type: 'mouseup', handler: onMouseUp },
+
+      { type: 'touchstart', handler: onTouchStart },
+
+      { type: 'touchmove', handler: onTouchMove },
+
+      { type: 'touchend', handler: onTouchEnd },
+    ];
+
+    events.forEach(({ type, handler }) => {
+      canvas.addEventListener(type, handler as EventListener);
+    });
+
+    return () => {
+      events.forEach(({ type, handler }) => {
+        canvas.removeEventListener(type, handler as EventListener);
+      });
+    };
+  }, [
+    onMouseDown,
+
+    onMouseMove,
+
+    onMouseUp,
+
+    onTouchStart,
+
+    onTouchMove,
+
+    onTouchEnd,
+  ]);
+
+  useEffect(() => {
+    const dispatcher = dispatcherContext.dispatcher;
+
+    if (!dispatcher) return; // Register global events
+
+    dispatcher.on(CLEAR_EVENT, clearCanvas);
+
+    dispatcher.on(UNDO_EVENT, handleUndo);
+
+    dispatcher.on(REDO_EVENT, handleRedo);
+
+    return () => {
+      dispatcher.off(CLEAR_EVENT, clearCanvas);
+
+      dispatcher.off(UNDO_EVENT, handleUndo);
+
+      dispatcher.off(REDO_EVENT, handleRedo);
+    };
+  }, [dispatcherContext, clearCanvas, handleUndo, handleRedo]);
+
+  useEffect(() => {
+    processRemoteDraw();
+  }, [processRemoteDraw]); // Cursor Style
+
+  const cursorStyle = useMemo(() => {
     return getCanvasCursorStyle(toolType, mainColor, subColor);
   }, [toolType, mainColor, subColor]);
+
   return (
     <canvas
-      className={`w-full h-full  ${
-        role !== 'drawer' ? 'pointer-events-none' : ''
-      }    `}
-      style={{
-        cursor: cursorStyleValue,
-      }}
       ref={canvasRef}
+      className={`w-full h-full ${
+        role !== 'drawer' ? 'pointer-events-none' : ''
+      }`}
+      style={{
+        cursor: cursorStyle,
+
+        touchAction: 'none',
+
+        width: '100%',
+
+        height: '100%',
+
+        display: 'block',
+      }}
     />
   );
 };

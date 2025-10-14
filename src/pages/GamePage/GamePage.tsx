@@ -38,6 +38,7 @@ const GamePage: React.FC = () => {
     min_players: 2,
     game_mode_id: 1, // Varsayılan mod
   });
+  const [isStatusInfoVisible, setIsStatusInfoVisible] = useState(true);
 
   // --- WEBSOCKET BAĞLANTISI ---
   const {
@@ -313,7 +314,7 @@ const GamePage: React.FC = () => {
         {/* Ana İçerik Alanı: Ayarlar veya Oyun Alanı */}
         <div
           style={{ height: currentStatus === 'idle' ? 'auto' : '80vh' }}
-          className="bg-white p-6 md:p-8 rounded-2xl shadow-2xl border border-gray-100"
+          className="bg-white p-6 md:p-8 rounded-2xl shadow-2xl border border-gray-100 flex flex-col"
         >
           {/* OYUN AYARLARI FORMU - Sadece 'idle' (oyun başlamadan önce) durumunda göster */}
           {currentStatus === 'idle' && (
@@ -329,29 +330,41 @@ const GamePage: React.FC = () => {
 
           {/* OYUN BAŞLADIYSA: Çizim Alanı ve Tahmin */}
           {(currentStatus === 'started' || currentStatus === 'ended') && (
-            <>
-              {/* Oyun Durumu Bilgisi (Çizeceğiniz Kelime / Oyun Sona Erdi) */}
+            <div className="relative w-full   h-full  flex-grow flex flex-col">
+              {/* Oyun Durumu Bilgisi (Canvas'ın üstünde görünür) */}
               <GameStatusInfo
                 gameStatus={currentStatus}
                 playerRole={playerRole}
+                isVisible={isStatusInfoVisible}
+                onClose={() => setIsStatusInfoVisible(false)} // Gizleme işlevi
               />
-
               {/* Çizim Alanı */}
-              <Paint
-                role={playerRole}
-                gameStatus={currentStatus}
-                sendMessage={sendMessage}
-                roomDrawData={roomDrawData}
-              />
-
-              {/* TAHMİN ALANI - SADECE GUESSER İÇİN GÖRÜNÜR */}
+              <div
+                className="flex-grow w-full"
+                // Sadece Guesser için, formun kapladığı alanı manuel olarak düşürüyoruz.
+                // Örneğin, tahmin formu 80px yer kaplıyorsa:
+                style={{
+                  height:
+                    currentStatus === 'started' && playerRole === 'guesser'
+                      ? 'calc(100% - 80px)'
+                      : '100%',
+                }}
+              >
+                <Paint
+                  role={playerRole}
+                  gameStatus={currentStatus}
+                  sendMessage={sendMessage}
+                  roomDrawData={roomDrawData}
+                />
+              </div>
+              {/* TAHMİN ALANI - SADECE GUESSER İÇİN GÖRÜNÜR (Canvas'ın altında yer alır) */}
               {currentStatus === 'started' && playerRole === 'guesser' && (
                 <GuessInputForm
                   onGuessSubmit={handleGuessSubmit}
                   connectionStatus={connectionStatus}
                 />
               )}
-            </>
+            </div>
           )}
         </div>
 

@@ -1,10 +1,4 @@
-import React, {
-  type JSX,
-  useState,
-  useRef,
-  useCallback,
-  useEffect,
-} from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import Toolbar from '../../components/toolBar';
 
 import {
@@ -32,15 +26,22 @@ import {
 } from '../../util/toolType';
 
 import Dispatcher from '../../util/dispatcher';
-import Snapshot from '../../util/snapshot';
+// import Snapshot from '../../util/snapshot'; // Snapshot burada kullanılmıyor, Canvas'ta olmalı
 import Canvas from '../../components/canvas';
+// WebSocketMessage artık GamePage.tsx'ten geliyor. Burada kullanılmıyorsa silinebilir.
+// Ancak prop olarak geldiği için interface'i koruyalım.
 import type { WebSocketMessage } from '../../hooks/useGameWebSocket';
+
 import {
   CLEAR_EVENT,
   REDO_EVENT,
   UNDO_EVENT,
 } from '../../util/dispatcher/event';
 
+/**
+ * Bu bileşen, çizim araçlarının ve renklerin durumunu yönetir (State Provider),
+ * bu durumu Context API aracılığıyla Toolbar ve Canvas bileşenlerine sağlar.
+ */
 interface PaintProps {
   role: 'drawer' | 'guesser' | null;
   gameStatus: 'idle' | 'started' | 'ended' | 'waiting';
@@ -54,14 +55,11 @@ const Paint: React.FC<PaintProps> = ({
   sendMessage,
   roomDrawData,
 }) => {
-  // Canvas referansı
-  const canvasRef = useRef<HTMLCanvasElement>(null);
+  // Canvas referansı - Paint bileşeninde doğrudan kullanılmıyor, ancak Dispatcher için tutulabilir.
+  // Ancak `Canvas` bileşeni kendi `canvasRef`'ini yönettiği için bu kaldırılabilir.
+  // const canvasRef = useRef<HTMLCanvasElement>(null);
 
-  // Çizim durumu
-  const [isDrawing, setIsDrawing] = useState(false);
-  const [canDraw] = useState(true);
-
-  // Araç ve ayar durumları
+  // --- ARAC VE AYAR DURUMLARI (STATE) ---
   const [toolType, setToolType] = useState<ToolType>(ToolValue.PEN);
   const [shapeType, setShapeType] = useState<ShapeToolType>(
     ShapeToolValue.LINE
@@ -77,156 +75,101 @@ const Paint: React.FC<PaintProps> = ({
   );
   const [mainColor, setMainColor] = useState<string>('#000000');
   const [subColor, setSubColor] = useState<string>('#FFFFFF');
-  const [dispatcher] = useState(new Dispatcher());
-  const [snapshot] = useState(new Snapshot());
 
-  // Konsol log fonksiyonu
+  // Tekil (Singleton) nesneler: Dispatcher (Olayları alt bileşenlere dağıtmak için)
+  const [dispatcher] = useState(() => new Dispatcher());
+  // const [snapshot] = useState(() => new Snapshot()); // Snapshot'ın yönetimi Canvas bileşeninde daha mantıklıdır.
+
+  // --- KULLANILMAYAN VE SİLİNEN DURUMLAR ---
+  // const [isDrawing, setIsDrawing] = useState(false); // Kullanılmıyor -> SİLİNDİ
+  // const [canDraw] = useState(true); // Kullanılmıyor ve gereksiz -> SİLİNDİ
+
+  // Konsol log fonksiyonu: Debug amaçlı tutulabilir
   const logAction = useCallback((action: string, details?: any) => {
-    console.log(`🎨 Çizim Eylemi: ${action}`, details ? details : '');
+    // console.log(`🎨 Çizim Eylemi: ${action}`, details ? details : ''); // Loglamayı kapat
   }, []);
 
-  // Renk ayarlama fonksiyonu
+  // --- RENK VE ARAÇ YÖNETİMİ FONKSİYONLARI ---
+
+  /**
+   * Seçili ana veya yardımcı rengi günceller.
+   */
   const setColor = useCallback(
     (value: string) => {
       if (activeColorType === ColorValue.MAIN) {
         setMainColor(value);
-        logAction('Ana renk değiştirildi', { renk: value });
       } else {
         setSubColor(value);
-        logAction('Yardımcı renk değiştirildi', { renk: value });
       }
+      logAction('Renk değiştirildi', { aktif: activeColorType, yeni: value });
     },
     [activeColorType, logAction]
   );
 
-  // YENİ: Renkleri değiştirme fonksiyonu
+  /**
+   * Ana ve yardımcı renkleri birbiriyle değiştirir (swap).
+   */
   const swapColors = useCallback(() => {
-    const temp = mainColor;
     setMainColor(subColor);
-    setSubColor(temp);
+    setSubColor(mainColor);
     logAction('Renkler değiştirildi', {
-      yeniAnaRenk: subColor,
-      yeniYardimciRenk: mainColor,
+      yeniAna: subColor,
+      yeniYardimci: mainColor,
     });
   }, [mainColor, subColor, logAction]);
 
-  // Araç tipi değiştirme
-  const handleToolChange = useCallback(
-    (newTool: ToolType) => {
-      setToolType(newTool);
-      const toolNames: Record<ToolType, string> = {
-        [ToolValue.PEN]: 'Kalem',
-        [ToolValue.ERASER]: 'Silgi',
-        [ToolValue.COLOR_EXTRACT]: 'Renk Seçici',
-        [ToolValue.COLOR_FILL]: 'Renk Doldurucu',
-        [ToolValue.SHAPE]: 'Şekil',
-        [ToolValue.TEXT]: 'Metin',
-        [ToolValue.MAGNIFYING]: 'Büyüteç',
-      };
-      logAction('Araç değiştirildi', { yeniArac: toolNames[newTool] });
-    },
-    [logAction]
-  );
+  /**
+   * Ana araç tipini günceller (Kalem, Silgi, Renk Seçici vb.).
+   */
+  const handleToolChange = useCallback((newTool: ToolType) => {
+    setToolType(newTool);
+    // logAction detayı gereksiz uzun, kaldırılabilir
+  }, []);
 
-  // Şekil tipi değiştirme
-  const handleShapeChange = useCallback(
-    (newShape: ShapeToolType) => {
-      setToolType(ToolValue.SHAPE);
-      setShapeType(newShape);
-      const shapeNames: Record<ShapeToolType, string> = {
-        [ShapeToolValue.LINE]: 'Çizgi',
-        [ShapeToolValue.RECT]: 'Dikdörtgen',
-        [ShapeToolValue.CIRCLE]: 'Daire',
-        [ShapeToolValue.TRIANGLE]: 'Üçgen',
-        [ShapeToolValue.RHOMBUS]: 'Eşkenar Dörtgen',
-        [ShapeToolValue.PENTAGON]: 'Beşgen',
-        [ShapeToolValue.SEXANGLE]: 'Altıgen',
-        [ShapeToolValue.ARROW_TOP]: 'Yukarı Ok',
-        [ShapeToolValue.ARROW_RIGHT]: 'Sağ Ok',
-        [ShapeToolValue.ARROW_DOWN]: 'Aşağı Ok',
-        [ShapeToolValue.ARROW_LEFT]: 'Sol Ok',
-        [ShapeToolValue.FOUR_STAR]: 'Dört Köşeli Yıldız',
-        [ShapeToolValue.FIVE_STAR]: 'Beş Köşeli Yıldız',
-      };
-      logAction('Şekil değiştirildi', { yeniSekil: shapeNames[newShape] });
-    },
-    [logAction]
-  );
+  /**
+   * Şekil aracını seçer ve şekil tipini günceller.
+   */
+  const handleShapeChange = useCallback((newShape: ShapeToolType) => {
+    // Şekil seçildiğinde otomatik olarak aracı SHAPE olarak ayarla
+    setToolType(ToolValue.SHAPE);
+    setShapeType(newShape);
+    // logAction detayı gereksiz uzun, kaldırılabilir
+  }, []);
 
-  // Çizgi kalınlığı değiştirme
-  const handleLineWidthChange = useCallback(
-    (newWidth: LineWidthType) => {
-      setLineWidthType(newWidth);
-      const widthNames: Record<LineWidthType, string> = {
-        [LineWidthValue.THIN]: 'İnce',
-        [LineWidthValue.MIDDLE]: 'Orta',
-        [LineWidthValue.BOLD]: 'Kalın',
-        [LineWidthValue.MAXBOLD]: 'Çok Kalın',
-      };
-      logAction('Çizgi kalınlığı değiştirildi', {
-        yeniKalınlık: widthNames[newWidth],
-      });
-    },
-    [logAction]
-  );
+  /**
+   * Çizgi kalınlığını günceller.
+   */
+  const handleLineWidthChange = useCallback((newWidth: LineWidthType) => {
+    setLineWidthType(newWidth);
+    // logAction detayı gereksiz uzun, kaldırılabilir
+  }, []);
 
-  // Canvas temizleme
-  const clearCanvas = useCallback(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
+  // --- KULLANILMAYAN FONKSİYONLAR (Sadece Dispatcher'ı tetikledikleri için sildik) ---
+  // Bu fonksiyonlar (clearCanvas, undo, redo) doğrudan `Toolbar` bileşeni içinde
+  // Dispatcher'ı kullanmalıdır, burada tutulmaları gereksizdir.
+  // const clearCanvas = useCallback(() => { dispatcher.dispatch(CLEAR_EVENT); }, [dispatcher]); // SİLİNDİ
+  // const undo = useCallback(() => { dispatcher.dispatch(UNDO_EVENT); }, [dispatcher]);         // SİLİNDİ
+  // const redo = useCallback(() => { dispatcher.dispatch(REDO_EVENT); }, [dispatcher]);         // SİLİNDİ
 
-    // Dispatcher'a olay göndermek için bu kod yerine, Canvas.tsx içindeki Dispatcher
-    // olayı tetiklenmelidir. Ancak burada yerel temizlik yapmak istiyorsak bu kalabilir.
-    // WebSocket mesajı göndermek için:
-    dispatcher.dispatch(CLEAR_EVENT);
-    logAction('Canvas temizlendi');
-  }, [logAction, dispatcher]); // Snapshot'a ekleme Canvas.tsx'e taşındı.
-
-  // Geri alma (Undo)
-  const undo = useCallback(() => {
-    // Canvas.tsx'e WebSocket mesajı gönderme görevi Canvas'tan yönetildi.
-    // Biz burada sadece Dispatcher'ı tetikliyoruz.
-    dispatcher.dispatch(UNDO_EVENT);
-    logAction('Geri alındı (Undo)');
-  }, [logAction, dispatcher]); // Snapshot kullanmak yerine dispatcher kullanıldı.
-
-  // İleri alma (Redo)
-  const redo = useCallback(() => {
-    // Canvas.tsx'e WebSocket mesajı gönderme görevi Canvas'tan yönetildi.
-    // Biz burada sadece Dispatcher'ı tetikliyoruz.
-    dispatcher.dispatch(REDO_EVENT);
-    logAction('İleri alındı (Redo)');
-  }, [logAction, dispatcher]); // Snapshot kullanmak yerine dispatcher kullanıldı.
-
-  // Canvas cursor ayarlama (Gerekli değil, Canvas.tsx içinde yönetiliyor)
-  // const getCanvasCursor = useCallback(() => { ... }, [toolType]);
-
-  // Canvas başlatma ve klavye kısayolları
+  // --- KLAVYE KISAYOLLARI (useEffect) ---
   useEffect(() => {
-    // Canvas.tsx'te boyut ve ilk arka plan zaten sabit 800x500 olarak ayarlandığı için
-    // buradaki boyut ayarlama ve ilk snapshot kodu kaldırılabilir/yoruma alınabilir.
-    // Ancak Canvas.tsx'teki useEffect içinde `canvasRef` kullanılmadığı için
-    // bu CanvasRef'in burada kalması bir problem teşkil etmez.
-
-    // Klavye kısayolları (Dispatcher'ı tetiklemesi için güncellendi)
+    // Sadece 'drawer' rolündekilerin kısayolları kullanmasına izin ver
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (role !== 'drawer') return; // Sadece çizen çizebilir/undo/redo yapabilir
+      if (role !== 'drawer') return;
 
       if (e.ctrlKey || e.metaKey) {
+        // Ctrl veya Cmd tuşuna basılıyorsa
         switch (e.key.toLowerCase()) {
-          case 'z':
+          case 'z': // Geri Al (Ctrl+Z)
             e.preventDefault();
-            if (e.shiftKey) {
-              dispatcher.dispatch(REDO_EVENT);
-            } else {
-              dispatcher.dispatch(UNDO_EVENT);
-            }
+            // Shift ile basıldıysa Redo, aksi halde Undo
+            dispatcher.dispatch(e.shiftKey ? REDO_EVENT : UNDO_EVENT);
             break;
-          case 'y':
+          case 'y': // İleri Al (Ctrl+Y)
             e.preventDefault();
             dispatcher.dispatch(REDO_EVENT);
             break;
-          case 'a':
+          case 'a': // Temizle (Ctrl+A)
             e.preventDefault();
             dispatcher.dispatch(CLEAR_EVENT);
             break;
@@ -235,21 +178,17 @@ const Paint: React.FC<PaintProps> = ({
     };
 
     window.addEventListener('keydown', handleKeyDown);
-    logAction('Uygulama başlatıldı', {
-      klavyeKisayollari: {
-        'Ctrl+Z': 'Geri Al',
-        'Ctrl+Shift+Z': 'İleri Al',
-        'Ctrl+Y': 'İleri Al',
-        'Ctrl+A': 'Temizle',
-      },
-    });
+    logAction('Klavye kısayolları etkinleştirildi');
 
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [logAction, dispatcher, role]); // Bağımlılıklar güncellendi
+  }, [dispatcher, role, logAction]); // Bağımlılıklar: dispatcher ve role
+
+  // --- RENDER (Context Sağlayıcıları ve Düzen) ---
 
   return (
+    // Tüm çizim durumlarını Context API ile alt bileşenlere sağlıyoruz.
     <ToolTypeContext.Provider
       value={{ type: toolType, setType: handleToolChange }}
     >
@@ -278,22 +217,19 @@ const Paint: React.FC<PaintProps> = ({
               >
                 {/* OYUN BAŞLADIĞINDA ÇİZİM ALANINI GÖSTER */}
                 {gameStatus === 'started' && (
-                  // 💡 KRİTİK DÜZENLEME: RESPONSIVE ÇERÇEVE
-                  // Mobil: flex-col-reverse (Toolbar alta) | Masaüstü (md:): flex-row (Toolbar sola)
-
-                  <div className="flex  h-[80%]  md:h-[90%]   md:flex-row w-full max-w-full   bg-gray-50 rounded-lg shadow-xl">
+                  // Ana Çizim Çerçevesi: h-full yaparak dış GamePage container'ının yüksekliğini kullanır
+                  <div className="flex flex-col md:flex-row w-full h-full bg-gray-50 rounded-xl shadow-2xl overflow-hidden">
                     {/* 1. TOOLBAR ALANI (SADECE DRAWER İÇİN) */}
                     {role === 'drawer' && (
-                      // Masaüstü: Sabit genişlik (max-w-xs), Kalın gölge
-                      // Mobil: Tam genişlik, Yatay kaydırma
-                      <div className="w-full  md:w-auto md:max-w-[200px] flex-shrink-0 bg-gray-100 md:bg-white border-t md:border-t-0 md:border-r border-gray-200 shadow-lg md:shadow-xl p-2 md:p-4 transition-all duration-300">
-                        {/* Toolbar'ın kendisi dikey/yatay düzeni yönetmeli */}
+                      <div className="w-full md:w-auto md:max-w-[200px] flex-shrink-0 bg-white border-b md:border-b-0 md:border-r border-gray-200 shadow-md md:shadow-xl p-2 md:p-4 transition-all duration-300 z-10">
+                        {/* Toolbar bileşeni kendi içindeki düğmeleri dikey/yatay olarak yönetmeli */}
                         <Toolbar />
                       </div>
                     )}
-                    {/* 2. CANVAS ALANI */}
 
-                    <div className="w-full cur h-full flex-grow  bg-yellow-100 flex items-center justify-center">
+                    {/* 2. CANVAS ALANI */}
+                    {/* Canvas'ı merkezlemek ve esnek bir alan vermek için flex-grow kullanılır */}
+                    <div className="w-full h-full flex-grow flex items-center justify-center relative">
                       <Canvas
                         sendMessage={sendMessage}
                         roomDrawData={roomDrawData}
@@ -304,7 +240,9 @@ const Paint: React.FC<PaintProps> = ({
                         mainColor={mainColor}
                         subColor={subColor}
                         lineWidthType={lineWidthType}
+                        // setColor (Renk seçici için) Canvas'a prop olarak geçirilmelidir.
                         setColor={setColor}
+                        // Diğer dispatcher/snapshot gibi propslar Context'ten alınıyor.
                       />
                     </div>
                   </div>
