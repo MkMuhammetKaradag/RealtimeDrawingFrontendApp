@@ -1,10 +1,10 @@
 import axios, { type AxiosInstance } from 'axios';
+import { api } from './service';
 
 // API'nin temel URL'sini buraya yaz
 // NOT: auth.service'den farklı olarak, sadece /game/rooms isteği attığınız için
 // temel URL'yi http://localhost:8080/ olarak ayarlıyoruz ve isteği /game/rooms olarak atıyoruz.
 // Eğer tüm oyun API'si http://localhost:8080/game altında toplanıyorsa, baseURL'i ona göre ayarlayabilirsiniz.
-const API_BASE_URL = 'http://localhost:8080';
 
 // Room yapısı için bir TypeScript arayüzü tanımlayalım
 export interface Room {
@@ -29,17 +29,6 @@ export interface GetRoomsResponse {
   rooms: Room[];
 }
 
-// Axios'tan bir instance oluştur.
-// Auth service'deki gibi, header'lar ve withCredentials ayarları burada da geçerli olmalı.
-const gameApi: AxiosInstance = axios.create({
-  baseURL: API_BASE_URL,
-  headers: {
-    'Content-Type': 'application/json',
-  },
-  // Cookie/Session tabanlı kimlik doğrulama kullanıyorsanız bu önemlidir.
-  withCredentials: true,
-});
-
 // Auth service'de olduğu gibi interceptorları burada da kurabiliriz,
 // ancak genellikle tek bir global axios instance veya tek bir interceptor setup fonksiyonu kullanılır.
 // Basitlik için, şimdilik sadece istek fonksiyonunu ekleyelim.
@@ -52,7 +41,7 @@ const gameApi: AxiosInstance = axios.create({
  */
 export const getVisibleRooms = async (): Promise<GetRoomsResponse> => {
   try {
-    const response = await gameApi.get<GetRoomsResponse>('/game/rooms');
+    const response = await api.get<GetRoomsResponse>('/game/rooms');
     // İsteğinizin URL'si: http://localhost:8080/game/rooms
     return response.data;
   } catch (error) {
@@ -91,7 +80,7 @@ export const updateGameMode = async (
   gameModeId: number
 ): Promise<any> => {
   try {
-    const response = await gameApi.patch(
+    const response = await api.patch(
       `/game/game-mode/${roomId}`, // İsteğinizin tam URL'si: http://localhost:8080/game/game-mode/:room_id
       {
         game_mode_id: gameModeId,

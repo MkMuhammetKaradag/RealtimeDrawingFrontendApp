@@ -34,7 +34,7 @@ import {
 import Dispatcher from '../../util/dispatcher';
 import Snapshot from '../../util/snapshot';
 import Canvas from '../../components/canvas';
-import type { WebSocketMessage } from '../GamePage/useGameWebSocket';
+import type { WebSocketMessage } from '../../hooks/useGameWebSocket';
 import {
   CLEAR_EVENT,
   REDO_EVENT,

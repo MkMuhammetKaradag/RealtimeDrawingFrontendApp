@@ -6,7 +6,7 @@ import App from './App.tsx';
 import { Provider } from 'react-redux';
 import { PersistGate } from 'redux-persist/integration/react';
 import { store, persistor } from './store/store.ts';
-import { setupInterceptors } from './services/auth.service.ts';
+import { setupInterceptors } from './services/service.ts';
 
 const Loading = () => (
   <div

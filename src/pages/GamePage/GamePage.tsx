@@ -1,45 +1,45 @@
 // src/pages/GamePage.tsx
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { useGameWebSocket } from './useGameWebSocket.ts';
-import Paint from '../paint/index.tsx';
-import { useAppSelector } from '../../store/hooks.ts';
-import { selectUser } from '../../store/slices/authSlice.ts';
-import GameSettingsForm from '../../components/game/GameSettingsForm.tsx';
-import { updateGameMode } from '../../services/game.service.ts';
-import { formToJSON } from 'axios';
-// Yeni bileşeni import et
+import { useGameWebSocket } from '../../hooks/useGameWebSocket'; // Hook yolu güncellendi
 
-// Ayar türlerini tanımlayalım (Backend'den beklenen format)
-interface GameSettings {
-  total_rounds: number;
-  round_duration: number; // Saniye
-  max_players: number;
-  min_players: number;
-  game_mode_id: number;
-}
+import { useAppSelector } from '../../store/hooks';
+import { selectUser } from '../../store/slices/authSlice';
+import GameSettingsForm from '../../components/game/GameSettingsForm';
+import GuessInputForm from '../../components/game/GuessInputForm'; // YENİ
+import GameStatusInfo from '../../components/game/GameStatusInfo'; // YENİ
+import ConnectionStatusCard from '../../components/common/ConnectionStatusCard'; // YENİ
+import { updateGameMode } from '../../services/game.service';
+import type {
+  GameSettings,
+  PlayerRole,
+  GameStatus,
+  WebSocketMessage,
+} from '../../types/game.interface'; // YENİ ARAYÜZLER
+import Paint from '../paint';
 
+/**
+ * Oyun Odası Bileşeni: Oyun mantığı, WebSocket iletişimi ve arayüzü yönetir.
+ */
 const GamePage: React.FC = () => {
   const { room_id } = useParams<{ room_id: string }>();
   const navigate = useNavigate();
-  const user = useAppSelector(selectUser);
-  const [guess, setGuess] = useState('');
-  const [role, setRole] = useState<'drawer' | 'guesser' | null>(null);
-  const [gameStatus, setGameStatus] = useState<
-    'idle' | 'started' | 'ended' | 'waiting'
-  >('idle');
-  // Yeni: Oda ayarlarını tutmak için state
+  const currentUser = useAppSelector(selectUser);
+
+  // --- OYUN DURUMU YÖNETİMİ ---
+  const [playerRole, setPlayerRole] = useState<PlayerRole>(null);
+  const [currentStatus, setCurrentStatus] = useState<GameStatus>('idle');
+  const [isRoomHost, setIsRoomHost] = useState(false); // Oda sahibi (Host) kontrolü
   const [gameSettings, setGameSettings] = useState<GameSettings>({
-    total_rounds: 5,
+    total_rounds: 2,
     round_duration: 60,
     max_players: 8,
     min_players: 2,
-    game_mode_id: 1,
+    game_mode_id: 1, // Varsayılan mod
   });
-  // Yeni: Oda sahibi (host) kontrolü
-  const [isHost, setIsHost] = useState(true); // Varsayılan olarak true, backend'den güncellenmeli
 
+  // --- WEBSOCKET BAĞLANTISI ---
   const {
     connectionStatus,
     errorMessage,
@@ -48,95 +48,107 @@ const GamePage: React.FC = () => {
     sendMessage,
   } = useGameWebSocket({
     roomId: room_id || '',
-    sessionToken: document.cookie.split('session=')[1],
+    sessionToken: document.cookie.split('session=')[1], // Güvenli çerez okuma örneği
   });
 
-  // Ayar Değişikliklerini İşlemek ve WebSocket ile Göndermek İçin Fonksiyon
-  const handleSettingChange = (name: keyof GameSettings, value: number) => {
-    // **1. Güncel ayarları hesapla**
+  // --- AYAR DEĞİŞİKLİĞİ İŞLEME ve GÖNDERME FONKSİYONLARI ---
 
-    if (value < 1) {
-      console.warn(
-        `${name} için minimum değer 1 olmalıdır. İşlem iptal edildi.`
-      );
-      // Kullanıcıya geri bildirim göstermek isteyebilirsiniz (örn. toast mesajı)
-      return;
-    }
-
-    // b) Özel Kısıtlamalar
-    if (name === 'max_players' && value > 10) {
-      console.warn(`Maksimum oyuncu sayısı 10'u geçemez. İşlem iptal edildi.`);
-      // Kullanıcıya hata mesajı gösterin
-      return;
-    }
-    if (name === 'total_rounds' && value > 10) {
-      console.warn(`Round sayısı 10'u geçemez. İşlem iptal edildi.`);
-      // Kullanıcıya hata mesajı gösterin
-      return;
-    }
-    // c) Minimum ve Maksimum Oyuncu Tutarlılığı Kontrolü (Gelişmiş)
-    if (name === 'min_players') {
-      // Eğer girilen min değer, mevcut max değerden büyükse
-      if (value > gameSettings.max_players) {
-        console.warn(
-          `Minimum oyuncu sayısı (${value}), maksimum oyuncu sayısından (${gameSettings.max_players}) büyük olamaz.`
-        );
+  /**
+   * Ayar değişikliğini kontrol eder, local state'i günceller ve WS ile sunucuya gönderir.
+   */
+  const handleSettingChange = useCallback(
+    (name: keyof GameSettings, value: number) => {
+      // 1. Girdi Kontrolleri (Client-Side Validasyon)
+      if (value < 1) {
+        console.warn(`${name} için minimum değer 1 olmalıdır.`);
         return;
       }
-    }
-    // Bu, state'in asenkron doğasını atlatan ve her zaman en güncel bilgiyi baz alan en güvenli yöntemdir.
-    setGameSettings((prevSettings) => {
-      // 2. Yeni ayar objesini oluştur
-      const updatedSettings: GameSettings = {
-        ...prevSettings,
-        [name]: value,
-      };
+      if (name === 'max_players' && value > 10) {
+        console.warn(`Maksimum oyuncu sayısı 10'u geçemez.`);
+        return;
+      }
+      if (name === 'total_rounds' && value > 10) {
+        console.warn(`Round sayısı 10'u geçemez.`);
+        return;
+      }
 
-      // 3. WebSocket üzerinden sunucuya ayar güncelleme mesajını gönder
-      // NOT: Bu, state'in güncellenmesini beklemez, güncellemek istediğimiz değeri gönderir.
-      sendMessage({
-        type: 'game_settings_update',
-        content: { ...updatedSettings }, // Hesaplanan updatedSettings'i kullan
+      setGameSettings((prevSettings) => {
+        // Min/Max Tutarlılık Kontrolü
+        if (name === 'min_players' && value > prevSettings.max_players) {
+          console.warn(
+            `Minimum oyuncu sayısı (${value}), maksimum oyuncu sayısından (${prevSettings.max_players}) büyük olamaz.`
+          );
+          return prevSettings; // Güncelleme yapma
+        }
+
+        // 2. Yeni ayar objesini oluştur
+        const updatedSettings: GameSettings = {
+          ...prevSettings,
+          [name]: value,
+        };
+
+        // 3. WebSocket üzerinden sunucuya güncelleme mesajını gönder
+        sendMessage({
+          type: 'game_settings_update',
+          content: updatedSettings,
+        });
+
+        // 4. Local state'i güncelle
+        return updatedSettings;
       });
+    },
+    [sendMessage]
+  );
 
-      // 4. Local state'i güncelle (React bunu asenkron yapar)
-      return updatedSettings;
-    });
-  };
-
+  /**
+   * Oyun Modunu API üzerinden günceller ve başarılı olursa local state'i günceller.
+   */
   const handleUpdateGameMode = async (modeId: number) => {
     if (!room_id) return;
 
     try {
-      // 1. API isteğini gönder
       await updateGameMode(room_id, modeId);
 
-      // 2. İstek başarılı olursa local state'i güncelle
+      // Başarılı olursa WS geri bildirimini beklemeden local state'i güncelle (Optimistic Update)
       setGameSettings((prevSettings) => ({
         ...prevSettings,
         game_mode_id: modeId,
       }));
 
-      console.log(`Oyun Modu ID ${modeId} olarak güncellendi.`);
+      console.log(`Oyun Modu ID ${modeId} olarak güncellendi (API).`);
     } catch (error) {
       console.error('Oyun modu güncellenemedi:', error);
-      // Kullanıcıya hata bildirimi gösterilebilir
     }
   };
-  // Oyunu Başlatma Fonksiyonu
+
+  /**
+   * Oyunu başlatma mesajını sunucuya gönderir.
+   */
   const handleStartGame = () => {
-    // Oyun Başlatma mesajını gönderirken güncel ayarları ekle
     sendMessage({
       type: 'game_started',
+      content: {}, // Ayarlar sunucuda tutulmalı, bu mesaj sadece başlatma komutudur
+    });
+  };
+
+  /**
+   * Tahmin mesajını sunucuya gönderir. GuessInputForm'dan çağrılır.
+   */
+  const handleGuessSubmit = (guessText: string) => {
+    sendMessage({
+      type: 'player_move',
       content: {
-        //settings: gameSettings,
+        type: 'guess',
+        text: guessText,
       },
     });
   };
 
+  /**
+   * Ayarlar formunda bulunan "Ayarları Güncelle" butonu için.
+   * Güncel ayarları WS ile sunucuya tekrar gönderir.
+   */
   const handleUpdatedSettingGame = () => {
-    // Oyun Başlatma mesajını gönderirken güncel ayarları ekle
-    console.log(gameSettings);
     sendMessage({
       type: 'game_settings_update',
       content: {
@@ -145,160 +157,135 @@ const GamePage: React.FC = () => {
     });
   };
 
-  const handleGuessSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!guess.trim()) return;
-
-    sendMessage({
-      type: 'player_move',
-      content: {
-        type: 'guess',
-        text: guess.trim(),
-      },
-    });
-    setGuess('');
-  };
-
-  // Uzak sunucudan gelen verileri işlemek için useEffect
+  // --- WEBSOCKET'TEN GELEN VERİLERİ İŞLEME (useEffect) ---
   useEffect(() => {
     if (!roomData) return;
 
-    if (roomData.type === 'canvas_update') {
-      console.log('Canvas güncellemesi alındı:', roomData);
-    } else if (roomData.type === 'game_started') {
-      setGameStatus('waiting');
-    } else if (roomData.type === 'game_over') {
-      setGameStatus('ended');
-      setRole(null);
-    } else if (roomData.type === 'round_start_drawer') {
-      setGameStatus('started');
-      setRole('drawer');
-    } else if (roomData.type === 'round_start_guesser') {
-      setGameStatus('started');
-      setRole('guesser');
-    } else if (
-      roomData.type === 'game_settings_updated' &&
-      'content' in roomData
-    ) {
-      // Sunucudan gelen ayarları güncelle
-      const newSettings = roomData.content as GameSettings;
-      setGameSettings(newSettings);
-      console.log('Oyun Ayarları Güncellendi:', newSettings);
-    } else if (roomData.type === 'game_status') {
-      if ('game_data' in roomData) {
-        const data = (roomData as unknown as { game_data: any }).game_data;
-        const myId = user?.id;
+    // TypeScript'te güvenli tür kontrolü için yardımcı fonksiyon
+    const message = roomData as WebSocketMessage & any; // 'any' ile geçici olarak genişletme
 
-        // HOST KONTROLÜ: Sunucudan gelen veride host ID'si varsa kontrol et
-        if (data.mode_data.HostId && myId === data.mode_data.HostId) {
-          setIsHost(true);
-        } else {
-          setIsHost(false);
+    switch (message.type) {
+      case 'game_started':
+        setCurrentStatus('waiting');
+        break;
+
+      case 'game_over':
+        setCurrentStatus('idle');
+        setPlayerRole(null);
+        break;
+
+      case 'round_start_drawer':
+        setCurrentStatus('started');
+        setPlayerRole('drawer');
+        break;
+
+      case 'round_start_guesser':
+        setCurrentStatus('started');
+        setPlayerRole('guesser');
+        break;
+
+      case 'game_settings_updated':
+        if (message.content) {
+          // Sunucudan gelen ayarları güncelle (Tamamen güvenilir kaynak)
+          setGameSettings(message.content as GameSettings);
+          console.log('Oyun Ayarları (WS) Güncellendi:', message.content);
         }
+        break;
 
-        // Sunucudan gelen ayarları al
-        if (data.mode_data.Settings) {
-          setGameSettings(data.mode_data.Settings);
-        }
+      case 'game_status':
+        if (message.game_data) {
+          const data = message.game_data;
+          const myId = currentUser?.id;
 
-        if (data.state === 'in_progress') {
-          setGameStatus('started');
-          if (data.mode_id == '1') {
-            const currentDrawerId = data.mode_data.CurrentDrawer;
-            setRole(currentDrawerId === myId ? 'drawer' : 'guesser');
+          // HOST KONTROLÜ
+          if (data.mode_data?.HostId && myId === data.mode_data.HostId) {
+            setIsRoomHost(true);
           } else {
-            setRole('drawer');
+            setIsRoomHost(false);
           }
-        } else if (data.state === 'finished' || data.state === 'over') {
-          setGameStatus('idle');
-          setRole(null);
-        } else if (data.state === 'waiting_for_players') {
-          // Oyun başlamadan önceki bekleme durumu
-          setGameStatus('idle');
-          setRole(null);
-        }
-      } else {
-        console.warn(
-          'Beklenmeyen game_status mesajı: game_data eksik',
-          roomData
-        );
-      }
-    } else if (roomData.type === 'room_status') {
-      // 'is_host' özelliği WebSocketMessage tipinde olmayabilir; önce varlığını kontrol edip güvenli şekilde okuyalım
-      if ('is_host' in roomData) {
-        const hostFlag = (roomData as any).is_host;
-        if (typeof hostFlag !== 'undefined') {
-          setIsHost(Boolean(hostFlag));
-        }
-      }
-    } else if (roomData.type === 'game_mode_changed') {
-      // Kontrol: game_mode_id özelliğinin varlığını ve boş olmadığını kontrol et
-      if ('game_mode_id' in roomData.content) {
-        // Veri string bile gelse Number() ile güvenli şekilde sayıya çeviriyoruz
-        const modID = Number((roomData.content as any).game_mode_id);
 
-        // modID'nin geçerli bir sayı olup olmadığını kontrol et
-        if (!isNaN(modID)) {
-          // *** ÖNEMLİ DÜZELTME: React Değişmezlik Kuralı ***
-          setGameSettings((prev) => ({
-            ...prev, // Önceki ayarları kopyala
-            game_mode_id: modID, // Yalnızca bu alanı güncelle
-          }));
+          // AYARLARI AL
+          if (data.mode_data?.Settings) {
+            setGameSettings(data.mode_data.Settings);
+          }
 
-          console.log(`Oyun Modu (WS) üzerinden ${modID} olarak güncellendi.`);
+          // OYUN DURUMU KONTROLÜ
+          if (data.state === 'in_progress') {
+            setCurrentStatus('started');
+            // Role belirleme mantığı: Eğer Skribbl tarzı (mode_id: 1) ise CurrentDrawer'a göre rol belirle
+            if (data.mode_id == 1) {
+              const currentDrawerId = data.mode_data.CurrentDrawer;
+              setPlayerRole(currentDrawerId === myId ? 'drawer' : 'guesser');
+            } else {
+              // Diğer modlar için (örn. herkes çizebiliyorsa) varsayılan rolü ata
+              setPlayerRole('drawer');
+            }
+          } else if (data.state === 'finished' || data.state === 'over') {
+            setCurrentStatus('ended');
+            setPlayerRole(null);
+          } else if (data.state === 'waiting_for_players') {
+            setCurrentStatus('idle');
+            setPlayerRole(null);
+          }
         }
-      }
+        break;
+
+      case 'room_status':
+        // 'is_host' özelliğini güvenli bir şekilde kontrol et ve güncelle
+        if ('is_host' in message) {
+          setIsRoomHost(Boolean(message.is_host));
+        }
+        break;
+
+      case 'game_mode_changed':
+        if ('game_mode_id' in message.content) {
+          const modeID = Number(message.content.game_mode_id);
+          if (!isNaN(modeID)) {
+            // Immutable (Değişmez) güncelleme kuralı
+            setGameSettings((prev) => ({
+              ...prev,
+              game_mode_id: modeID,
+            }));
+            console.log(
+              `Oyun Modu (WS) üzerinden ${modeID} olarak güncellendi.`
+            );
+          }
+        }
+        break;
+
+      // Diğer mesaj tipleri buraya eklenebilir
+      default:
+        // console.log(`İşlenmeyen mesaj tipi: ${message.type}`, message);
+        break;
     }
-  }, [roomData, user?.id]);
+  }, [roomData, currentUser?.id]); // Bağımlılıklar: roomData her değiştiğinde ve kullanıcı ID'si değiştiğinde çalışır
 
-  // --- Bağlantı Durumu Kartı --- (Değişmedi)
-
-  if (connectionStatus === 'connecting') {
+  // --- RENDER (Bağlantı ve Hata Durumları) ---
+  if (
+    connectionStatus === 'connecting' ||
+    connectionStatus === 'error' ||
+    connectionStatus === 'disconnected'
+  ) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-gray-900">
-        <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-indigo-500"></div>
-        <p className="text-white text-xl ml-4">Odaya bağlanılıyor...</p>
-      </div>
+      <ConnectionStatusCard
+        status={connectionStatus as 'connecting' | 'error' | 'disconnected'}
+        errorMessage={errorMessage}
+      />
     );
   }
 
-  if (connectionStatus === 'error' || connectionStatus === 'disconnected') {
-    return (
-      <div className="flex items-center justify-center min-h-screen bg-gray-900 p-4">
-        <div className="w-full max-w-md p-8 bg-white border-t-4 border-red-600 rounded-xl shadow-2xl">
-          <h2 className="text-3xl font-extrabold text-red-600 mb-4 text-center">
-            Bağlantı Kesildi! 🔴
-          </h2>
-          <p className="text-lg text-gray-700 mb-6 text-center">
-            Sunucuyla bağlantı koptu. Lütfen internet bağlantınızı kontrol edin.
-            {errorMessage && (
-              <span className="block text-sm text-red-500 mt-2">
-                Hata: {errorMessage}
-              </span>
-            )}
-          </p>
-          <button
-            onClick={() => window.location.reload()}
-            className="w-full px-6 py-3 bg-red-600 text-white font-semibold rounded-lg shadow-md hover:bg-red-700 transition-transform transform hover:scale-[1.01]"
-          >
-            Tekrar Dene
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  // --- Ana Oyun Sayfası ---
+  // --- ANA SAYFA RENDER'I ---
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen bg-gray-900">
       <div className="w-full max-w-7xl mx-auto p-4">
+        {/* Başlık ve Bağlantı Bilgisi */}
         <header className="flex flex-col sm:flex-row justify-between items-center mb-6 p-4 bg-gray-800 rounded-xl shadow-lg">
           <div className="flex items-center space-x-4">
             <span
               className="text-white hover:cursor-pointer text-xl font-medium"
               onClick={() => navigate('/')}
             >
-              🏠 Home
+              🏠 Ana Sayfa
             </span>
             <h1 className="text-3xl font-extrabold text-indigo-400">
               🎨 Oyun Odası: {room_id}
@@ -312,88 +299,68 @@ const GamePage: React.FC = () => {
                   : 'bg-yellow-500 text-gray-900'
               }`}
             >
-              Durum: {connectionStatus === 'connected' ? 'BAĞLI' : 'BAĞLANIYOR'}
+              WS Durum:{' '}
+              {connectionStatus === 'connected' ? 'BAĞLI' : 'BAĞLANIYOR'}
             </span>
-            {role && (
+            {playerRole && (
               <span className="px-3 py-1 text-sm font-semibold rounded-full bg-indigo-600 text-white">
-                ROL: {role === 'drawer' ? 'ÇİZENSİN' : 'TAHMİN EDENSİN'}
+                ROL: {playerRole === 'drawer' ? 'ÇİZENSİN' : 'TAHMİN EDENSİN'}
               </span>
             )}
           </div>
         </header>
 
-        {/* Ana İçerik Alanı */}
+        {/* Ana İçerik Alanı: Ayarlar veya Oyun Alanı */}
         <div
-          style={{ height: gameStatus === 'idle' ? 'auto' : '80vh' }}
+          style={{ height: currentStatus === 'idle' ? 'auto' : '80vh' }}
           className="bg-white p-6 md:p-8 rounded-2xl shadow-2xl border border-gray-100"
         >
-          {/* OYUN AYARLARI FORMU - Sadece 'idle' durumunda göster */}
-          {gameStatus === 'idle' && (
+          {/* OYUN AYARLARI FORMU - Sadece 'idle' (oyun başlamadan önce) durumunda göster */}
+          {currentStatus === 'idle' && (
             <GameSettingsForm
               settings={gameSettings}
               onSettingChange={handleSettingChange}
               onStartGame={handleStartGame}
               onUpdatedSetting={handleUpdatedSettingGame}
               onUpdateGameMode={handleUpdateGameMode}
-              isHost={isHost}
+              isHost={isRoomHost}
             />
           )}
 
           {/* OYUN BAŞLADIYSA: Çizim Alanı ve Tahmin */}
-          {gameStatus === 'started' && (
+          {(currentStatus === 'started' || currentStatus === 'ended') && (
             <>
-              {role === 'drawer' && (
-                <p className="text-center text-2xl font-black text-green-600 mb-6 bg-green-50 p-3 rounded-lg border-l-4 border-green-600">
-                  Çizeceğiniz Kelime
-                </p>
-              )}
+              {/* Oyun Durumu Bilgisi (Çizeceğiniz Kelime / Oyun Sona Erdi) */}
+              <GameStatusInfo
+                gameStatus={currentStatus}
+                playerRole={playerRole}
+              />
+
+              {/* Çizim Alanı */}
               <Paint
-                role={role}
-                gameStatus={gameStatus}
+                role={playerRole}
+                gameStatus={currentStatus}
                 sendMessage={sendMessage}
                 roomDrawData={roomDrawData}
               />
 
               {/* TAHMİN ALANI - SADECE GUESSER İÇİN GÖRÜNÜR */}
-              {role === 'guesser' && (
-                <form
-                  onSubmit={handleGuessSubmit}
-                  className="mt-6 flex flex-col md:flex-row gap-3"
-                >
-                  <input
-                    type="text"
-                    value={guess}
-                    onChange={(e) => setGuess(e.target.value)}
-                    placeholder="Tahmininizi buraya yazın..."
-                    className="flex-grow p-3 border-2 border-indigo-300 rounded-lg focus:outline-none focus:border-indigo-500 transition duration-150"
-                    disabled={connectionStatus !== 'connected'}
-                  />
-                  <button
-                    type="submit"
-                    className="md:w-auto px-6 py-3 bg-indigo-600 text-white font-bold rounded-lg shadow-md hover:bg-indigo-700 transition duration-150 disabled:bg-indigo-400"
-                    disabled={!guess.trim() || connectionStatus !== 'connected'}
-                  >
-                    TAHMİN ET! 💬
-                  </button>
-                </form>
+              {currentStatus === 'started' && playerRole === 'guesser' && (
+                <GuessInputForm
+                  onGuessSubmit={handleGuessSubmit}
+                  connectionStatus={connectionStatus}
+                />
               )}
             </>
           )}
-
-          {/* OYUN SONA ERDİ MESAJI */}
-          {gameStatus === 'ended' && (
-            <p className="text-center text-2xl font-black text-red-600 mb-6 bg-red-50 p-3 rounded-lg border-l-4 border-red-600">
-              Oyun SONA ERDİ. 🏁
-            </p>
-          )}
         </div>
 
-        {/* Alt Bilgi ve Konsol Verisi */}
+        {/* Alt Bilgi ve Debug Verisi */}
         <footer className="text-center text-gray-400 mt-8">
           {roomData && (
             <div className="mt-6 p-4 bg-gray-700 rounded-xl text-left text-sm overflow-auto max-h-48 shadow-inner">
               <p className="text-gray-300 font-bold mb-2">
-                Son Oda Verisi (Debug)
+                Son Oda Verisi (Hata Ayıklama)
               </p>
               <pre className="text-gray-400 whitespace-pre-wrap">
                 {JSON.stringify(roomData, null, 2)}
