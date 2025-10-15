@@ -35,14 +35,20 @@ export const getTouchPos = (
   canvas: HTMLCanvasElement,
   event: TouchEvent
 ): Point => {
-  // NOT: getBoundingClientRect() kullanmak genellikle offsetLeft/Top kullanmaktan daha modern ve güvenlidir.
-  return {
-    // İlk dokunma noktasının (touches[0]) sayfa konumu ile Canvas'ın ofset konumu arasındaki farkı alır.
-    x: event.touches[0].pageX - canvas.offsetLeft,
-    y: event.touches[0].pageY - canvas.offsetTop,
-  };
-};
+  const touch = event.touches[0];
+  const rect = canvas.getBoundingClientRect();
+  const dpr = window.devicePixelRatio || 1;
 
+  // CSS koordinatları
+  const cssX = touch.clientX - rect.left;
+  const cssY = touch.clientY - rect.top;
+
+  // DPR'ye göre adjust et - ColorFill için farklı, diğer araçlar için farklı
+  const x = cssX * dpr; // Diğer araçlar için
+  const y = cssY * dpr;
+
+  return { x, y };
+};
 /**
  * RGB(A) renk bileşenlerini Hexadecimal (Onaltılık) renk koduna dönüştürür.
  * @param r - Kırmızı bileşeni (0-255)

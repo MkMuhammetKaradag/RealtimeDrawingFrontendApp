@@ -21,21 +21,23 @@ const efficentFloodFill = (
   startY: number,
   fillColor: [number, number, number]
 ) => {
+  const isMobile =
+    /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
+      navigator.userAgent
+    );
+
   // startX ve startY'nin tam sayı (integer) olduğundan emin olunur.
   // Bu, özellikle dokunmatik cihazlarda oluşabilecek ondalık koordinat hatalarını önler.
-  startX = Math.round(startX);
-  startY = Math.round(startY);
+  if (isMobile) {
+    startX = Math.round(startX);
+    startY = Math.round(startY);
+  }
 
   // Doldurma için ziyaret edilecek piksel koordinatlarının yığını (stack)
-  const pixelStack: [number, number][] = [
-    [Math.round(startX), Math.round(startY)],
-  ];
-  const canvasWidth = ctx.canvas.width,
-    canvasHeight = ctx.canvas.height;
-
-  // Başlangıç noktasının ImageData dizisindeki indeksini hesaplar (R bileşeni)
+  const pixelStack: [number, number][] = [[startX, startY]];
+  const canvasWidth = ctx.canvas.width;
+  const canvasHeight = ctx.canvas.height;
   const startPos = (startY * canvasWidth + startX) * 4;
-
   // Tüm Canvas'ın ImageData'sını alır
   const colorLayer = ctx.getImageData(0, 0, canvasWidth, canvasHeight);
 
@@ -171,24 +173,29 @@ class ColorFill extends Tool {
    * Doldurma işlemini başlatır. Fare/Dokunma olaylarından çağrılır.
    * @param pos - Tıklanan/Dokunulan konum
    */
-  private operateStart(pos: Point) {
-    // Tool.mainColor (Hex) değerini Color kütüphanesi ile ayrıştırır.
+  private operateStart(pos: Point, isTouch: boolean = false) {
+    if (!Tool.ctx) return;
+
+    const canvas = Tool.ctx.canvas;
+    const dpr = canvas.width / canvas.clientWidth;
+
+    // Koordinatları DPR ile çarp
+    const x = Math.round(pos.x * dpr);
+    const y = Math.round(pos.y * dpr);
+
+    console.log('🚨 ACİL ÇÖZÜM - ColorFill:', {
+      inputPos: pos,
+      outputPos: { x, y },
+      dpr: dpr,
+    });
+
     const color = new Color(Tool.mainColor);
-
-    // Loglama: Doldurma başlangıcını kaydeder (Fare için, dokunma değil).
-    logFillStart(ToolValue.COLOR_FILL, pos, Tool.mainColor, false);
-
-    // Flood Fill algoritmasını çağırır.
-    efficentFloodFill(Tool.ctx, pos.x, pos.y, [
+    efficentFloodFill(Tool.ctx, x, y, [
       color.red(),
       color.green(),
       color.blue(),
     ]);
-
-    // Loglama: Doldurma bitişini kaydeder (Fare için, dokunma değil).
-    logFillEnd(ToolValue.COLOR_FILL, pos, false);
   }
-
   // --- Fare Olay Yöneticileri ---
 
   public onMouseDown(event: MouseEvent): void {
@@ -203,23 +210,39 @@ class ColorFill extends Tool {
 
   public onTouchStart(event: TouchEvent): void {
     if (event.cancelable) {
-      event.preventDefault(); // Varsayılan kaydırma hareketini engeller.
+      event.preventDefault();
     }
-    const touchpos = getTouchPos(event.target as HTMLCanvasElement, event);
 
-    // Touch için log doldurma başlangıcı
-    logFillStart(ToolValue.COLOR_FILL, touchpos, Tool.mainColor, true);
+    const canvas = event.target as HTMLCanvasElement;
+    const touch = event.touches[0];
 
-    // Rengi ayrıştırır ve doldurma işlemini başlatır.
+    // Canvas'ın gerçek boyutlarını ve DPR'yi al
+    const rect = canvas.getBoundingClientRect();
+    const dpr = window.devicePixelRatio || 1;
+
+    // CSS piksel koordinatları
+    const cssX = touch.clientX - rect.left;
+    const cssY = touch.clientY - rect.top;
+
+    // Gerçek canvas koordinatlarına dönüştür (DPR'ye böl)
+    const x = Math.round(cssX / dpr);
+    const y = Math.round(cssY / dpr);
+
+    console.log(
+      `Mobile ColorFill - CSS: ${cssX},${cssY} Canvas: ${x},${y} DPR: ${dpr}`
+    );
+
+    // Touch için log
+    logFillStart(ToolValue.COLOR_FILL, { x, y }, Tool.mainColor, true);
+
     const color = new Color(Tool.mainColor);
-    efficentFloodFill(Tool.ctx, touchpos.x, touchpos.y, [
+    efficentFloodFill(Tool.ctx, x, y, [
       color.red(),
       color.green(),
       color.blue(),
     ]);
 
-    // Touch için log doldurma bitişi
-    logFillEnd(ToolValue.COLOR_FILL, touchpos, true);
+    logFillEnd(ToolValue.COLOR_FILL, { x, y }, true);
   }
 
   // onTouchMove ve onTouchEnd metodları bu araç için kullanılmaz.
