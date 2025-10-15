@@ -27,8 +27,12 @@ class ColorExtract extends Tool {
     pos: { x: number; y: number },
     isTouch: boolean = false
   ) {
+    const canvas = Tool.ctx.canvas;
+    const dpr = canvas.width / canvas.clientWidth;
+    const x = Math.round(pos.x * dpr);
+    const y = Math.round(pos.y * dpr);
     // 1. Tıklanan pozisyondaki pikselin rengini Hex formatında alır.
-    const color = getPixelColorOnCanvas(Tool.ctx, pos.x, pos.y);
+    const color = getPixelColorOnCanvas(Tool.ctx, x, y);
 
     // 2. Alınan rengi dışarıdan gelen fonksiyon aracılığıyla ayarlar (Ana Rengi günceller).
     this.setColor(color);

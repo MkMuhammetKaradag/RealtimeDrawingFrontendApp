@@ -73,6 +73,11 @@ class Snapshot {
   public getLatestImageData() {
     return this.imageData1[this.imageData1.length - 1] || null;
   }
+
+  public clear() {
+    this.imageData1 = [];
+    this.imageData2 = [];
+  }
 }
 
 export default Snapshot;
