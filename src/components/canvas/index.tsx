@@ -21,7 +21,6 @@ import type {
 import {
   LineWidthValue,
   ShapeOutlineValue,
-  ShapeToolValue,
   ToolValue,
 } from '../../util/toolType';
 
@@ -47,7 +46,6 @@ import {
   logCanvasClear,
   logCanvasUndo,
   logCanvasRedo,
-  logCanvasResize,
 } from '../../util/logger';
 
 import { getCanvasCursorStyle } from '../../util/cursor/iconToCursor';
@@ -360,82 +358,65 @@ const Canvas: FC<CanvasProps> = ({
   const setupCanvas = useCallback(
     (isInitialSetup: boolean = false) => {
       const canvas = canvasRef.current;
-
       if (!canvas) return;
 
       const ctx = canvas.getContext('2d');
-
       if (!ctx) return;
 
       const dpr = getDevicePixelRatio();
-
       dprRef.current = dpr;
 
       const rect = canvas.getBoundingClientRect();
-
       const cssWidth = rect.width;
-
       const cssHeight = rect.height;
-
       const realWidth = cssWidth * dpr;
+      const realHeight = cssHeight * dpr;
 
-      const realHeight = cssHeight * dpr; // Boyut değişikliği kontrolü
-
-      const previousWidth = canvasSizeRef.current.width;
-
-      const previousHeight = canvasSizeRef.current.height; // ✅ DEĞİŞİKLİK: Eğer boyut değişmediyse ve ilk kurulum değilse, canvas'ı ASLA sıfırlama
-
+      // Eğer boyutlar aynıysa ve ilk kurulum değilse, sadece içeriği koru
       if (
         !isInitialSetup &&
-        previousWidth === realWidth &&
-        previousHeight === realHeight
+        canvas.width === realWidth &&
+        canvas.height === realHeight
       ) {
-        console.log('Canvas size unchanged, skipping setup');
-
         return;
-      } // ✅ DEĞİŞİKLİK: Canvas state'ini geçici olarak sakla
+      }
 
+      // Mevcut içeriği geçici olarak sakla
       const currentImageData = isInitialSetup
         ? null
-        : ctx.getImageData(0, 0, realWidth, realHeight); // Canvas boyutlarını ayarla
+        : ctx.getImageData(0, 0, canvas.width, canvas.height);
 
+      // Canvas boyutlarını güncelle
       canvas.width = realWidth;
-
       canvas.height = realHeight;
-
       canvasSizeRef.current = { width: realWidth, height: realHeight };
 
       canvas.style.width = `${cssWidth}px`;
+      canvas.style.height = `${cssHeight}px`;
 
-      canvas.style.height = `${cssHeight}px`; // Context'i scale et
-
+      // Transform'u sıfırla ve scale uygula
       ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.scale(dpr, dpr);
 
-      ctx.scale(dpr, dpr); // Tool context'ini ayarla
-
-      Tool.ctx = ctx; // ✅ DEĞİŞİKLİK: SADECE İLK KURULUMDA veya boyut değiştiğinde beyaz temizleme
+      Tool.ctx = ctx;
 
       if (isInitialSetup || !isInitializedRef.current) {
+        // İlk kurulum - beyaz arkaplan
         ctx.fillStyle = 'white';
-
         ctx.fillRect(0, 0, cssWidth, cssHeight);
-
         isInitializedRef.current = true;
-
         snapshot.add(ctx.getImageData(0, 0, realWidth, realHeight));
       } else if (currentImageData) {
-        // ✅ YENİ: Boyut değiştiyse önceki içeriği geri yükle
-
+        // Önceki içeriği geri yükle
         ctx.putImageData(currentImageData, 0, 0);
       }
 
       console.log(
-        `Canvas Setup - CSS: ${cssWidth}x${cssHeight}, Real: ${realWidth}x${realHeight}, DPR: ${dpr}`
+        `Canvas Setup - Role: ${role}, CSS: ${cssWidth}x${cssHeight}`
       );
     },
-
-    [snapshot, getDevicePixelRatio]
-  );
+    [snapshot, getDevicePixelRatio, role]
+  ); // role'ü bağımlılığa ekleyin
 
   useEffect(() => {
     const initialTool = createToolInstance();
@@ -449,30 +430,34 @@ const Canvas: FC<CanvasProps> = ({
 
   useEffect(() => {
     const canvas = canvasRef.current;
+    if (!canvas) return;
 
-    if (!canvas) return; // İlk kurulum
-
-    setupCanvas(true); // Resize observer
+    setupCanvas(true);
 
     const resizeObserver = new ResizeObserver((entries) => {
       for (const entry of entries) {
         if (entry.target === canvas) {
-          // ✅ DEĞİŞİKLİK: Resize sırasında canvas içeriğini koru
-
-          shouldPreserveCanvasRef.current = true;
-
-          setupCanvas(false);
+          // Rol değişikliğinden hemen sonra boyutlandırma yap
+          requestAnimationFrame(() => {
+            setupCanvas(false);
+          });
         }
       }
     });
 
     resizeObserver.observe(canvas);
-
     return () => {
       resizeObserver.unobserve(canvas);
     };
   }, [setupCanvas]); // Canvas setup ve resize observer // Message Sending
+  useEffect(() => {
+    // Rol değiştiğinde canvas'ı yeniden boyutlandır
+    const timer = setTimeout(() => {
+      setupCanvas(false);
+    }, 100);
 
+    return () => clearTimeout(timer);
+  }, [role, setupCanvas]);
   const sendDrawMessage = useCallback(
     (
       action: DrawMessage['content']['function'],
@@ -871,24 +856,6 @@ const Canvas: FC<CanvasProps> = ({
 
     scaleCoordinate,
   ]); // Effects
-
-  useEffect(() => {
-    const canvas = canvasRef.current;
-
-    if (!canvas) return; // İlk kurulum
-
-    setupCanvas(); // Boyut değişikliklerini izle
-
-    const resizeObserver = new ResizeObserver(() => {
-      setupCanvas();
-    });
-
-    resizeObserver.observe(canvas);
-
-    return () => {
-      resizeObserver.unobserve(canvas);
-    };
-  }, [setupCanvas]);
 
   useEffect(() => {
     const canvas = canvasRef.current;

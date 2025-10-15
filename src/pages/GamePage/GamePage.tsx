@@ -340,7 +340,7 @@ const GamePage: React.FC = () => {
               />
               {/* Çizim Alanı */}
               <div
-                className="flex-grow w-full"
+                className="flex-grow w-full relative min-h-60"
                 // Sadece Guesser için, formun kapladığı alanı manuel olarak düşürüyoruz.
                 // Örneğin, tahmin formu 80px yer kaplıyorsa:
                 style={{
@@ -351,6 +351,7 @@ const GamePage: React.FC = () => {
                 }}
               >
                 <Paint
+                  key={`${playerRole}-${currentStatus}`}
                   role={playerRole}
                   gameStatus={currentStatus}
                   sendMessage={sendMessage}
