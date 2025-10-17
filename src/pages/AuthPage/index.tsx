@@ -1,24 +1,17 @@
 // src/pages/AuthPage/index.tsx
-
 import React, { useState, useEffect } from 'react';
 import LoginForm from '../../components/auth/LoginForm';
 import RegisterForm from '../../components/auth/RegisterForm';
 import { useAppSelector } from '../../store/hooks';
 import { selectIsAuthenticated } from '../../store/slices/authSlice';
 import { useNavigate } from 'react-router-dom';
-import './AuthPageModule.css'; // Sayfa stili için CSS dosyası
 
 const AuthPage = () => {
   const navigate = useNavigate();
-
-  // Redux store'dan kullanıcının kimlik doğrulama durumunu al
   const isAuthenticated = useAppSelector(selectIsAuthenticated);
-
-  // Form görünümünü yönetmek için state
   const [isLoginView, setIsLoginView] = useState(true);
   const [mounted, setMounted] = useState(false);
 
-  // Kullanıcı zaten giriş yapmışsa, ana sayfaya yönlendir
   useEffect(() => {
     setMounted(true);
     if (isAuthenticated) {
@@ -31,33 +24,16 @@ const AuthPage = () => {
   };
 
   return (
-    // <div className="auth-page-container">
-    //   <div className="auth-card-wrapper">
-    //     <h2 className="auth-title">{isLoginView ? 'Giriş Yap' : 'Kayıt Ol'}</h2>
-
-    //     {/* Koşullu renderlama ile doğru formu göster */}
-    //     {isLoginView ? (
-    //       <LoginForm onToggle={handleToggleView} />
-    //     ) : (
-    //       <RegisterForm />
-    //     )}
-
-    //     <p className="toggle-view-text" onClick={handleToggleView}>
-    //       {isLoginView
-    //         ? 'Henüz hesabın yok mu? Kayıt ol'
-    //         : 'Zaten hesabın var mı? Giriş yap'}
-    //     </p>
-    //   </div>
-    // </div>
-    <div className="auth-page">
+    <div className="min-h-screen bg-gradient-to-br from-blue-600 via-purple-600 to-blue-800 flex items-center justify-center p-4 relative overflow-hidden">
       {/* Animated background particles */}
-      <div className="particles">
+      <div className="absolute inset-0 pointer-events-none">
         {[...Array(50)].map((_, i) => (
           <div
             key={i}
-            className="particle"
+            className="absolute w-1 h-1 bg-white/60 rounded-full animate-float"
             style={{
               left: `${Math.random() * 100}%`,
+              top: '100%',
               animationDelay: `${Math.random() * 3}s`,
               animationDuration: `${3 + Math.random() * 4}s`,
             }}
@@ -65,42 +41,60 @@ const AuthPage = () => {
         ))}
       </div>
 
-      <div className="auth-container">
-        <div className={`auth-card ${mounted ? 'mounted' : ''}`}>
+      <div className="w-full max-w-md z-10">
+        <div
+          className={`bg-white/95 backdrop-blur-xl rounded-2xl p-8 shadow-2xl shadow-black/20 border border-white/20 transition-all duration-700 ${
+            mounted ? 'translate-y-0 opacity-100' : 'translate-y-12 opacity-0'
+          }`}
+        >
           {/* Logo/Game title */}
-          <div className="game-logo">
-            <div className="logo-text">
-              <span className="logo-main">Mk</span>
-              <span className="logo-sub">.IO</span>
+          <div className="text-center mb-8">
+            <div className="mb-2">
+              <span className="text-4xl font-black bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+                Mk
+              </span>
+              <span className="text-4xl font-black text-gray-800 -ml-1">
+                .IO
+              </span>
             </div>
-            <div className="logo-tagline">Oyunun Gücü Seninle</div>
+            <div className="text-sm font-medium text-gray-600">
+              Oyunun Gücü Seninle
+            </div>
           </div>
 
           {/* Form title with slide animation */}
-          <div className="form-title-container">
-            <h2
-              className={`form-title ${
-                isLoginView ? 'login-active' : 'register-active'
-              }`}
-            >
-              <span className="title-text">
+          <div className="text-center mb-8 h-16 flex items-center justify-center">
+            <h2 className="relative transition-all duration-500">
+              <span
+                className={`text-2xl font-bold text-gray-800 block transition-all duration-500 ${
+                  isLoginView ? 'translate-x-0' : '-translate-x-2'
+                }`}
+              >
                 {isLoginView ? 'Hoş Geldin!' : 'Aramıza Katıl!'}
               </span>
-              <div className="title-underline"></div>
+              <div
+                className={`h-1 bg-gradient-to-r from-blue-600 to-purple-600 rounded-full mx-auto mt-2 transition-all duration-500 ${
+                  isLoginView ? 'w-20' : 'w-24'
+                }`}
+              ></div>
             </h2>
           </div>
 
           {/* Form container with smooth transition */}
-          <div className="form-container">
+          <div className="relative overflow-hidden rounded-xl">
             <div
-              className={`form-slider ${
-                isLoginView ? 'show-login' : 'show-register'
+              className={`flex transition-transform duration-500 ease-in-out ${
+                isLoginView ? 'translate-x-0' : '-translate-x-1/2'
               }`}
+              style={{ width: '200%' }}
             >
-              <div className="form-panel login-panel">
+              {/* Login Form Panel */}
+              <div className="w-1/2 px-1">
                 <LoginForm onToggle={handleToggleView} />
               </div>
-              <div className="form-panel register-panel">
+
+              {/* Register Form Panel */}
+              <div className="w-1/2 px-1">
                 <RegisterForm onToggle={handleToggleView} />
               </div>
             </div>

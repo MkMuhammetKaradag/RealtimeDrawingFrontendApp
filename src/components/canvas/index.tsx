@@ -737,7 +737,7 @@ const Canvas: FC<CanvasProps> = ({
   return (
     <canvas
       ref={canvasRef}
-      className={`w-full h-full ${
+      className={`w-full h-full  min-h-80 ${
         role !== 'drawer' ? 'pointer-events-none' : ''
       }`}
       style={{

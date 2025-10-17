@@ -1,24 +1,25 @@
 import { canvasLogger, type LogData } from '../logger';
 
 // WebSocket mesaj tipleri
-export enum WebSocketMessageType {
+export const WebSocketMessageValue = {
   // Canvas işlemleri
-  CANVAS_ACTION = 'CANVAS_ACTION',
-  
-  // Kullanıcı yönetimi
-  USER_JOIN = 'USER_JOIN',
-  USER_LEAVE = 'USER_LEAVE',
-  
-  // Oda yönetimi
-  ROOM_JOIN = 'ROOM_JOIN',
-  ROOM_LEAVE = 'ROOM_LEAVE',
-  
-  // Sistem mesajları
-  PING = 'PING',
-  PONG = 'PONG',
-  ERROR = 'ERROR',
-}
+  CANVAS_ACTION: 'CANVAS_ACTION',
 
+  // Kullanıcı yönetimi
+  USER_JOIN: 'USER_JOIN',
+  USER_LEAVE: 'USER_LEAVE',
+
+  // Oda yönetimi
+  ROOM_JOIN: 'ROOM_JOIN',
+  ROOM_LEAVE: 'ROOM_LEAVE',
+
+  // Sistem mesajları
+  PING: 'PING',
+  PONG: 'PONG',
+  ERROR: 'ERROR',
+};
+export type WebSocketMessageType =
+  (typeof WebSocketMessageValue)[keyof typeof WebSocketMessageValue];
 // WebSocket mesaj yapısı
 export interface WebSocketMessage {
   type: WebSocketMessageType;
@@ -30,7 +31,7 @@ export interface WebSocketMessage {
 
 // Canvas action mesajı
 export interface CanvasActionMessage {
-  type: WebSocketMessageType.CANVAS_ACTION;
+  type: typeof WebSocketMessageValue.CANVAS_ACTION;
   data: {
     action: LogData;
     canvasState?: {
@@ -83,7 +84,10 @@ export class CanvasWebSocketClient {
   // WebSocket bağlantısı kurma
   public connect(): Promise<void> {
     return new Promise((resolve, reject) => {
-      if (this.isConnecting || (this.ws && this.ws.readyState === WebSocket.OPEN)) {
+      if (
+        this.isConnecting ||
+        (this.ws && this.ws.readyState === WebSocket.OPEN)
+      ) {
         resolve();
         return;
       }
@@ -97,19 +101,19 @@ export class CanvasWebSocketClient {
           console.log('🔗 WebSocket bağlantısı kuruldu');
           this.isConnecting = false;
           this.reconnectAttempts = 0;
-          
+
           // Odaya katılma mesajı gönder
           this.sendMessage({
-            type: WebSocketMessageType.ROOM_JOIN,
+            type: WebSocketMessageValue.ROOM_JOIN,
             data: { roomId: this.roomId, userId: this.userId },
             timestamp: Date.now(),
             userId: this.userId,
-            roomId: this.roomId
+            roomId: this.roomId,
           });
 
           // Kuyruktaki mesajları gönder
           this.flushMessageQueue();
-          
+
           this.emit('connected');
           resolve();
         };
@@ -124,10 +128,14 @@ export class CanvasWebSocketClient {
         };
 
         this.ws.onclose = (event) => {
-          console.log('🔌 WebSocket bağlantısı kapandı:', event.code, event.reason);
+          console.log(
+            '🔌 WebSocket bağlantısı kapandı:',
+            event.code,
+            event.reason
+          );
           this.isConnecting = false;
           this.emit('disconnected', { code: event.code, reason: event.reason });
-          
+
           // Otomatik yeniden bağlanma
           if (this.reconnectAttempts < this.maxReconnectAttempts) {
             this.scheduleReconnect();
@@ -140,7 +148,6 @@ export class CanvasWebSocketClient {
           this.emit('error', error);
           reject(error);
         };
-
       } catch (error) {
         this.isConnecting = false;
         reject(error);
@@ -153,11 +160,11 @@ export class CanvasWebSocketClient {
     if (this.ws) {
       // Odayı terk etme mesajı gönder
       this.sendMessage({
-        type: WebSocketMessageType.ROOM_LEAVE,
+        type: WebSocketMessageValue.ROOM_LEAVE,
         data: { roomId: this.roomId, userId: this.userId },
         timestamp: Date.now(),
         userId: this.userId,
-        roomId: this.roomId
+        roomId: this.roomId,
       });
 
       this.ws.close();
@@ -176,16 +183,19 @@ export class CanvasWebSocketClient {
   }
 
   // Canvas işlemi gönderme
-  public sendCanvasAction(action: LogData, canvasState?: { width: number; height: number; imageData?: string }): void {
+  public sendCanvasAction(
+    action: LogData,
+    canvasState?: { width: number; height: number; imageData?: string }
+  ): void {
     const message: CanvasActionMessage = {
-      type: WebSocketMessageType.CANVAS_ACTION,
+      type: WebSocketMessageValue.CANVAS_ACTION,
       data: {
         action,
-        canvasState
+        canvasState,
       },
       timestamp: Date.now(),
       userId: this.userId,
-      roomId: this.roomId
+      roomId: this.roomId,
     };
 
     this.sendMessage(message);
@@ -195,11 +205,11 @@ export class CanvasWebSocketClient {
   public startAutoSendCanvasActions(): void {
     // Logger'dan yeni log'ları dinle
     const originalLog = canvasLogger.log.bind(canvasLogger);
-    
+
     canvasLogger.log = (data: LogData) => {
       // Orijinal log fonksiyonunu çağır
       originalLog(data);
-      
+
       // WebSocket'e gönder
       this.sendCanvasAction(data);
     };
@@ -234,49 +244,49 @@ export class CanvasWebSocketClient {
   private emit(event: string, data?: any): void {
     const listeners = this.eventListeners.get(event);
     if (listeners) {
-      listeners.forEach(callback => callback(data));
+      listeners.forEach((callback) => callback(data));
     }
   }
 
   // Mesaj işleme
   private handleMessage(message: WebSocketMessage): void {
     switch (message.type) {
-      case WebSocketMessageType.CANVAS_ACTION:
+      case WebSocketMessageValue.CANVAS_ACTION:
         this.emit('canvasAction', message);
         break;
-        
-      case WebSocketMessageType.USER_JOIN:
+
+      case WebSocketMessageValue.USER_JOIN:
         this.emit('userJoin', message);
         break;
-        
-      case WebSocketMessageType.USER_LEAVE:
+
+      case WebSocketMessageValue.USER_LEAVE:
         this.emit('userLeave', message);
         break;
-        
-      case WebSocketMessageType.ROOM_JOIN:
+
+      case WebSocketMessageValue.ROOM_JOIN:
         this.emit('roomJoin', message);
         break;
-        
-      case WebSocketMessageType.ROOM_LEAVE:
+
+      case WebSocketMessageValue.ROOM_LEAVE:
         this.emit('roomLeave', message);
         break;
-        
-      case WebSocketMessageType.PING:
+
+      case WebSocketMessageValue.PING:
         this.sendMessage({
-          type: WebSocketMessageType.PONG,
+          type: WebSocketMessageValue.PONG,
           data: { timestamp: Date.now() },
-          timestamp: Date.now()
+          timestamp: Date.now(),
         });
         break;
-        
-      case WebSocketMessageType.PONG:
+
+      case WebSocketMessageValue.PONG:
         this.emit('pong', message);
         break;
-        
-      case WebSocketMessageType.ERROR:
+
+      case WebSocketMessageValue.ERROR:
         this.emit('error', message);
         break;
-        
+
       default:
         console.warn('Bilinmeyen WebSocket mesaj tipi:', message.type);
     }
@@ -295,12 +305,15 @@ export class CanvasWebSocketClient {
   // Yeniden bağlanma planlama
   private scheduleReconnect(): void {
     this.reconnectAttempts++;
-    const delay = this.reconnectInterval * Math.pow(2, this.reconnectAttempts - 1); // Exponential backoff
-    
-    console.log(`🔄 ${delay}ms sonra yeniden bağlanma denemesi ${this.reconnectAttempts}/${this.maxReconnectAttempts}`);
-    
+    const delay =
+      this.reconnectInterval * Math.pow(2, this.reconnectAttempts - 1); // Exponential backoff
+
+    console.log(
+      `🔄 ${delay}ms sonra yeniden bağlanma denemesi ${this.reconnectAttempts}/${this.maxReconnectAttempts}`
+    );
+
     setTimeout(() => {
-      this.connect().catch(error => {
+      this.connect().catch((error) => {
         console.error('Yeniden bağlanma hatası:', error);
       });
     }, delay);
@@ -322,7 +335,11 @@ export class CanvasWebSocketClient {
   }
 
   // Canvas durumunu almak için yardımcı fonksiyon
-  public static getCanvasState(canvas: HTMLCanvasElement): { width: number; height: number; imageData: string } {
+  public static getCanvasState(canvas: HTMLCanvasElement): {
+    width: number;
+    height: number;
+    imageData: string;
+  } {
     const ctx = canvas.getContext('2d');
     if (!ctx) {
       throw new Error('Canvas context bulunamadı');
@@ -334,20 +351,26 @@ export class CanvasWebSocketClient {
     return {
       width: canvas.width,
       height: canvas.height,
-      imageData: base64
+      imageData: base64,
     };
   }
 }
 
 // WebSocket hook'u (React için)
-export const useCanvasWebSocket = (url: string, userId: string, roomId: string) => {
-  const [wsClient, setWsClient] = React.useState<CanvasWebSocketClient | null>(null);
+export const useCanvasWebSocket = (
+  url: string,
+  userId: string,
+  roomId: string
+) => {
+  const [wsClient, setWsClient] = React.useState<CanvasWebSocketClient | null>(
+    null
+  );
   const [isConnected, setIsConnected] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     const client = new CanvasWebSocketClient(url, userId, roomId);
-    
+
     client.on('connected', () => {
       setIsConnected(true);
       setError(null);
@@ -365,7 +388,7 @@ export const useCanvasWebSocket = (url: string, userId: string, roomId: string) 
     setWsClient(client);
 
     // Bağlanma
-    client.connect().catch(err => {
+    client.connect().catch((err) => {
       setError(err.message || 'Bağlantı hatası');
     });
 
@@ -381,10 +404,12 @@ export const useCanvasWebSocket = (url: string, userId: string, roomId: string) 
     error,
     connect: () => wsClient?.connect(),
     disconnect: () => wsClient?.disconnect(),
-    sendCanvasAction: (action: LogData, canvasState?: { width: number; height: number; imageData?: string }) => 
-      wsClient?.sendCanvasAction(action, canvasState),
+    sendCanvasAction: (
+      action: LogData,
+      canvasState?: { width: number; height: number; imageData?: string }
+    ) => wsClient?.sendCanvasAction(action, canvasState),
     startAutoSend: () => wsClient?.startAutoSendCanvasActions(),
-    stopAutoSend: () => wsClient?.stopAutoSendCanvasActions()
+    stopAutoSend: () => wsClient?.stopAutoSendCanvasActions(),
   };
 };
 

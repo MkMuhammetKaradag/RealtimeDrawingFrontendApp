@@ -1,22 +1,17 @@
+// src/components/Toolbar/tool.tsx (GÜNCELLENMİŞ - MOBİL OPTİMİZE)
+
 import React, { useContext, type FC, type JSX } from 'react';
-
-// İkonları içe aktar
-import { IoMdCreate } from 'react-icons/io'; // Kalem
-import { MdFormatColorFill } from 'react-icons/md'; // Doldurma
-import { FaEraser } from 'react-icons/fa'; // Silgi
-import { MdColorize } from 'react-icons/md'; // Renk Seçici (Damlalık)
-
+import { IoMdCreate } from 'react-icons/io';
+import { MdFormatColorFill } from 'react-icons/md';
+import { FaEraser } from 'react-icons/fa';
+import { MdColorize } from 'react-icons/md';
 import { ToolValue, type ToolType } from '../../../util/toolType';
 import { ToolTypeContext } from '../../../context';
 
-// TypeScript Arayüzü
 export interface ToolPanelProps {
-  className?: string; // Dışarıdan gelen stil sınıfı
+  className?: string;
 }
 
-/**
- * Tek bir araç butonunu temsil eden yardımcı bileşen.
- */
 interface ToolItemProps {
   title: string;
   icon: JSX.Element;
@@ -34,52 +29,39 @@ const ToolItem: FC<ToolItemProps> = ({
 }) => {
   const isSelected = currentType === toolType;
 
-  // Tailwind sınıfları:
+  // Mobil ve masaüstü için farklı boyutlar
   const baseClasses =
-    'flex justify-center items-center w-8 h-8 cursor-pointer p-1 border border-transparent rounded-md transition-all text-xl shadow-sm';
+    'flex justify-center items-center cursor-pointer border border-transparent rounded-md transition-all shadow-sm';
+  const mobileClasses = 'w-7 h-7 p-0.5 text-base';
+  const desktopClasses = 'md:w-8 md:h-8 md:p-1 md:text-xl';
+
   const hoverClasses = 'hover:border-indigo-500 hover:bg-indigo-100';
   const selectedClasses = isSelected
     ? 'bg-indigo-200 border-indigo-600 text-indigo-800 shadow-lg'
     : 'text-gray-700 bg-white';
 
   return (
-    <button title={title} onClick={() => onClick(toolType)} type="button">
-      <div className={`${baseClasses} ${hoverClasses} ${selectedClasses}`}>
-        {icon}
-      </div>
+    <button
+      title={title}
+      onClick={() => onClick(toolType)}
+      type="button"
+      className={`${baseClasses} ${mobileClasses} ${desktopClasses} ${hoverClasses} ${selectedClasses}`}
+    >
+      {icon}
     </button>
   );
 };
 
-// ----------------------------------------------------------------------
-
 const ToolPanel: FC<ToolPanelProps> = (props): JSX.Element => {
   const { className } = props;
-
   const toolContext = useContext(ToolTypeContext);
   const { type, setType } = toolContext;
 
-  // ----------------------------------------------------------------------
-  // KRİTİK DEĞİŞİKLİK: MASAÜSTÜNDE ÇOKLU SÜTUN (FLEX-WRAP İLE)
-  // ----------------------------------------------------------------------
-
   return (
-    // Mobil (Varsayılan): Yatay akış (Toolbar'a uyar), öğeler yan yana.
-    // Masaüstü (md:): Dikey değil, satırları saran yatay akış (flex-row flex-wrap).
+    // Mobilde yatay, masaüstünde dikey olmayan - her zaman yatay
     <div
-      className={`${className} w-full flex flex-row flex-wrap items-center justify-center space-x-2 md:space-x-1 md:space-y-1 p-0`}
+      className={`${className} flex flex-row items-center justify-center gap-1 md:gap-2 p-0`}
     >
-      {/*
-        Masaüstü Modunda:
-        - `flex-row` ve `flex-wrap` sayesinde butonlar yan yana sıralanır ve
-          sığmadığında alt satıra geçer.
-        - `md:w-1/2` (opsiyonel) ile her öğenin genişliğini ayarlayarak
-          iki sütunlu bir düzeni zorlayabiliriz, ancak bu örnekte sadece
-          `flex-wrap` yeterli olacaktır.
-        - Daha temiz bir grid görünümü için `md:gap-1` kullanıldı.
-      */}
-
-      {/* Kalem (Pencil) */}
       <ToolItem
         title="Kalem"
         icon={<IoMdCreate />}
@@ -88,7 +70,6 @@ const ToolPanel: FC<ToolPanelProps> = (props): JSX.Element => {
         onClick={setType}
       />
 
-      {/* Silgi (Eraser) */}
       <ToolItem
         title="Silgi"
         icon={<FaEraser />}
@@ -97,7 +78,6 @@ const ToolPanel: FC<ToolPanelProps> = (props): JSX.Element => {
         onClick={setType}
       />
 
-      {/* Renk Doldurma (Fill) */}
       <ToolItem
         title="Renk Doldur"
         icon={<MdFormatColorFill />}
@@ -106,30 +86,13 @@ const ToolPanel: FC<ToolPanelProps> = (props): JSX.Element => {
         onClick={setType}
       />
 
-      {/* Renk Seçici (Color Extractor) */}
       <ToolItem
-        title="Renk Seçici (Damlalık)"
+        title="Renk Seçici"
         icon={<MdColorize />}
         toolType={ToolValue.COLOR_EXTRACT}
         currentType={type}
         onClick={setType}
       />
-
-      {/* Örnek olarak ek araçlar ekleyelim (Düzeni görmek için) */}
-      {/* <ToolItem
-        title="Metin Ekle"
-        icon={<IoMdCreate />} // İkonu placeholder olarak kullandık
-        toolType={ToolValue.TEXT as ToolType}
-        currentType={type}
-        onClick={setType}
-      />
-      <ToolItem
-        title="Büyüteç"
-        icon={<MdColorize />} // İkonu placeholder olarak kullandık
-        toolType={ToolValue.MAGNIFYING as ToolType}
-        currentType={type}
-        onClick={setType}
-      /> */}
     </div>
   );
 };

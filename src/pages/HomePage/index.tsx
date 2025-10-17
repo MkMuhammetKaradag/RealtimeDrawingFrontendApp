@@ -2,100 +2,83 @@ import React, { useState, useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { logoutUser } from '../../store/slices/authSlice';
 import type { AppDispatch, RootState } from '../../store/store';
-// Game Service'den gerekli fonksiyon ve tipleri içeri aktarıyoruz
 import { getVisibleRooms, type Room } from '../../services/game.service';
-import { hello } from '../../services/auth.service'; // Test için tutulabilir
+import { hello } from '../../services/auth.service';
 import { useNavigate } from 'react-router-dom';
-// Helper bileşenler (opsiyonel ama yapıyı temiz tutar)
-// import DrawingCanvas from '../../components/home/DrawingCanvas'; // Şimdilik odalara odaklanmak için kaldırılabilir/kullanılmayabilir.
 
 const HomePage = () => {
   const dispatch = useDispatch<AppDispatch>();
   const user = useSelector((state: RootState) => state.auth.user);
   const navigate = useNavigate();
-  // 1. Durum Yönetimi: Odalar, Yükleme ve Hata için state'ler
+
   const [rooms, setRooms] = useState<Room[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-
-  // 2. Özel Oda Girişi için state
   const [privateRoomId, setPrivateRoomId] = useState('');
 
-  // 3. Veri Çekme Fonksiyonu
+  const [retryCount, setRetryCount] = useState(0);
+
   const fetchRooms = async () => {
     setIsLoading(true);
-    setError(null); // Yeni istekte hatayı sıfırla
+    setError(null);
     try {
       const data = await getVisibleRooms();
       setRooms(data.rooms);
+      setRetryCount(0);
     } catch (err) {
       console.error('Odaları çekerken hata:', err);
-      setError('Odalar yüklenirken bir sorun oluştu. Lütfen tekrar deneyin.');
+      const errorMessage =
+        err instanceof Error
+          ? err.message
+          : 'Odalar yüklenirken bir sorun oluştu. Lütfen tekrar deneyin.';
+      setError(errorMessage);
     } finally {
       setIsLoading(false);
     }
   };
 
-  // 4. Component yüklendiğinde odaları çek
   useEffect(() => {
     fetchRooms();
-  }, []);
+  }, [retryCount]);
 
-  // --- Olay İşleyicileri ---
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (!isLoading) {
+        fetchRooms();
+      }
+    }, 30000);
+
+    return () => clearInterval(interval);
+  }, [isLoading]);
 
   const handleLogout = () => {
     dispatch(logoutUser());
   };
 
-  // Odaya Katılma İşlevi (Şimdilik sadece console log)
-  const handleJoinRoom = (roomId: string) => {
-    console.log(`Odaya Katıl: ${roomId}`);
-    // Gerçek uygulamada: navigate(`/game/${roomId}`) veya WebSocket bağlantısı başlat
-    alert(`Odaya Katılma İsteği: ${roomId}`);
-  };
   const attemptToConnectToRoom = (roomId: string) => {
-    const wsUrl = `ws://localhost:8080/wsgame/ws/game/${roomId}`;
-
-    // **ŞİMDİ SADECE YÖNLENDİRME YAPIYORUZ:**
-    // Gerçek bağlantı ve ilk mesaj kontrolü, bu URL'ye yönlendirdiğimiz
-    // yeni bir GamePage bileşeninde yapılmalıdır.
-
-    // Eğer burası bir "Geri Dön" aksiyonu ise, kullanıcının odaya
-    // girme isteği başarılı olana kadar direkt yönlendirme en iyi yoldur.
-
-    console.log(`WebSocket bağlantısı deneniyor: ${wsUrl}`);
-
-    // Yönlendirmeyi yap. Bağlantı denemesi ve hata/başarı yönetimi
-    // artık /game/:room_id sayfasının sorumluluğundadır.
+    console.log(`WebSocket bağlantısı deneniyor: ${roomId}`);
     navigate(`/game/${roomId}`);
-
-    // NOT: Hata kontrolü için (örneğin, "Oyun bitti" hatası) GamePage bileşeniniz
-    // ilk WebSocket mesajını almalı ve hata gelirse kullanıcıyı
-    // 'navigate('/')' ile ana sayfaya geri göndermelidir.
   };
+
   const handleActionRoom = (roomId: string, isUserInRoom: boolean) => {
     if (isUserInRoom) {
       console.log(`[GERİ DÖN] Odaya bağlanılıyor: ${roomId}`);
-      // Kullanıcı odadaysa, direkt bağlantı denemesini başlat.
       attemptToConnectToRoom(roomId);
     } else {
       console.log(`[KATIL] Odaya katılma isteği: ${roomId}`);
-      // Kullanıcı odada değilse, önce "katıl" API çağrısı yapılıp
-      // ardından başarılıysa bağlantı denemesi başlatılmalıdır.
-      // Şimdilik sadece bağlantı denemesini başlatıyoruz (Katılma API çağrısı atlanmıştır).
       attemptToConnectToRoom(roomId);
     }
   };
-  // Özel Odaya Katılma İşlevi (Giriş alanından)
+
   const handleJoinPrivateRoom = (e: React.FormEvent) => {
     e.preventDefault();
     if (privateRoomId.trim() === '') return;
+
     console.log(`Özel Odaya Katılma ID: ${privateRoomId}`);
-    handleJoinRoom(privateRoomId); // Örneğin, bu ID ile odaya katılmayı deneriz.
+    attemptToConnectToRoom(privateRoomId.trim());
     setPrivateRoomId('');
   };
 
-  // Hello butonu handler (test için tutulabilir)
   const handleHello = async () => {
     try {
       const response = await hello();
@@ -107,182 +90,246 @@ const HomePage = () => {
     }
   };
 
-  // --- Görsel Alanı (Return) ---
+  const handleRetry = () => {
+    setRetryCount((prev) => prev + 1);
+  };
+
+  const getStatusColor = (status: string) => {
+    return status === 'waiting'
+      ? 'bg-green-100 text-green-800 border-green-200'
+      : 'bg-yellow-100 text-yellow-800 border-yellow-200';
+  };
 
   return (
-    <div className="min-h-screen bg-gray-100 p-6 sm:p-10">
+    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-indigo-900 p-4 sm:p-6 lg:p-8">
       <div className="max-w-7xl mx-auto">
-        {/* Başlık ve Kullanıcı Bilgisi */}
-        <div className="flex justify-between items-center mb-6 p-4 bg-white shadow rounded-xl">
-          <h1 className="text-3xl font-extrabold text-blue-600">Oda Listesi</h1>
-          <div className="flex space-x-4 items-center">
+        {/* Header - Auth sayfasıyla uyumlu koyu tema */}
+        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-8 p-6 bg-gray-800/80 backdrop-blur-sm rounded-2xl shadow-2xl border border-gray-700/50">
+          <div className="flex-1">
+            <h1 className="text-3xl lg:text-4xl font-bold bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent">
+              Oda Listesi
+            </h1>
             {user && (
-              <span className="text-xl text-gray-700 font-medium hidden sm:inline">
+              <p className="text-lg text-gray-300 mt-2">
                 Hoş geldiniz,{' '}
-                <span className="text-blue-500 font-bold">{user.username}</span>
+                <span className="font-semibold text-indigo-300">
+                  {user.username}
+                </span>
                 !
-              </span>
+              </p>
             )}
-            <div className="flex space-x-4">
-              <button
-                onClick={handleHello}
-                className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors shadow-md"
-              >
-                Hello Server
-              </button>
-              <button
-                onClick={handleLogout}
-                className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors shadow-md"
-              >
-                Çıkış Yap
-              </button>
-            </div>
+          </div>
+
+          <div className="flex flex-wrap gap-3">
+            <button
+              onClick={fetchRooms}
+              disabled={isLoading}
+              className="px-4 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-xl hover:from-indigo-700 hover:to-purple-700 transition-all duration-200 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+            >
+              <span>🔄</span>
+              {isLoading ? 'Yükleniyor...' : 'Yenile'}
+            </button>
+
+            <button
+              onClick={handleHello}
+              className="px-4 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-xl hover:from-emerald-700 hover:to-teal-700 transition-all duration-200 shadow-lg hover:shadow-xl"
+            >
+              Hello Server
+            </button>
+
+            <button
+              onClick={handleLogout}
+              className="px-4 py-2 bg-gradient-to-r from-red-600 to-pink-600 text-white rounded-xl hover:from-red-700 hover:to-pink-700 transition-all duration-200 shadow-lg hover:shadow-xl"
+            >
+              Çıkış Yap
+            </button>
           </div>
         </div>
 
-        {/* Özel Oda Giriş Formu */}
-        <div className="mb-8 p-6 bg-white shadow rounded-xl border border-blue-200">
-          <h2 className="text-xl font-semibold text-gray-700 mb-4">
-            Özel Odaya ID ile Katıl
+        {/* Private Room Form - Koyu tema */}
+        <div className="mb-8 p-6 bg-gray-800/80 backdrop-blur-sm rounded-2xl shadow-2xl border border-gray-700/50">
+          <h2 className="text-xl font-semibold text-gray-200 mb-4 flex items-center gap-2">
+            <span>🔐</span>
+            Özel Odaya Katıl
           </h2>
           <form
             onSubmit={handleJoinPrivateRoom}
             className="flex flex-col sm:flex-row gap-4"
           >
-            <input
-              type="text"
-              value={privateRoomId}
-              onChange={(e) => setPrivateRoomId(e.target.value)}
-              placeholder="Oda ID'sini Girin"
-              className="flex-grow p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              required
-            />
+            <div className="flex-1">
+              <input
+                type="text"
+                value={privateRoomId}
+                onChange={(e) => setPrivateRoomId(e.target.value)}
+                placeholder="Oda ID'sini girin..."
+                className="w-full p-4 border-2 border-gray-600 rounded-xl focus:outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/20 transition-all duration-200 bg-gray-700/50 text-white placeholder-gray-400"
+                required
+              />
+            </div>
             <button
               type="submit"
-              className="px-6 py-3 bg-indigo-500 text-white font-bold rounded-lg hover:bg-indigo-600 transition-colors shadow-md"
+              className="px-8 py-4 bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-bold rounded-xl hover:from-indigo-700 hover:to-purple-700 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
             >
               Odaya Gir
             </button>
           </form>
         </div>
 
-        {/* Oda Listesi Alanı */}
-        <h2 className="text-2xl font-bold text-gray-700 mb-4 border-b pb-2">
-          Herkese Açık Odalar ({rooms.length})
-        </h2>
+        {/* Rooms Section - Koyu tema */}
+        <div className="bg-gray-800/80 backdrop-blur-sm rounded-2xl shadow-2xl border border-gray-700/50 p-6">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+            <h2 className="text-2xl font-bold text-gray-200">
+              Herkese Açık Odalar
+              <span className="ml-2 text-indigo-400">({rooms.length})</span>
+            </h2>
 
-        {isLoading && (
-          <div className="p-8 text-center text-xl text-blue-500">
-            Odalar yükleniyor... 🔄
-          </div>
-        )}
-
-        {error && (
-          <div className="p-4 bg-red-100 border border-red-400 text-red-700 rounded-lg">
-            Hata: {error}
-            <button onClick={fetchRooms} className="ml-4 underline font-medium">
-              Tekrar Dene
-            </button>
-          </div>
-        )}
-
-        {!isLoading && !error && rooms.length === 0 && (
-          <div className="p-8 text-center text-xl text-gray-500 bg-white rounded-xl shadow">
-            Aktif oda bulunamadı. Yeni bir oda oluşturmak ister misiniz? 🛋️
-          </div>
-        )}
-
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-          {' '}
-          {/* Grid sınıfını eklediğinizden emin olun! */}
-          {rooms.map((room) => {
-            // Kullanılabilirlik ve Durum Değişkenleri
-            const isFull = room.current_players >= room.max_players;
-            const canJoin = room.status === 'waiting' && !isFull;
-            const isUserMember = room.is_user_in_room; // Yeni kontrolümüz
-
-            // Butonun Metni ve Etkinliği
-            let buttonText = 'Odaya Katıl';
-            let buttonDisabled = !canJoin && !isUserMember; // Üyeyse ve tam değilse etkin
-
-            if (isUserMember) {
-              buttonText = 'Oyuna Gir / Geri Dön';
-              buttonDisabled = false; // Kullanıcı zaten odadaysa her zaman etkin olmalı
-            } else if (isFull) {
-              buttonText = 'Oda Dolu';
-              buttonDisabled = true;
-            } else if (room.status !== 'waiting') {
-              buttonText = 'Oyun Başladı';
-              buttonDisabled = true;
-            }
-
-            // Butonun Rengi
-            const buttonClass = isUserMember
-              ? 'bg-green-500 hover:bg-green-600' // Kullanıcı odadaysa yeşil
-              : 'bg-blue-500 hover:bg-blue-600'; // Değilse varsayılan mavi
-
-            return (
-              <div
-                key={room.id}
-                className={`bg-white p-6 rounded-xl shadow-lg hover:shadow-xl transition-shadow border-t-4 
-                          ${
-                            isUserMember
-                              ? 'border-green-500'
-                              : 'border-blue-500'
-                          }`} // Kullanıcı odadaysa sınır rengi değişir
-              >
-                {/* ... oda bilgileri (room_name, mode_name, oyuncu sayısı) ... */}
-                <h3 className="text-xl font-bold text-gray-800 mb-2 truncate">
-                  {room.room_name}
-                  {isUserMember && (
-                    <span className="ml-2 text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full font-bold">
-                      SİZ BURADASINIZ
-                    </span>
-                  )}
-                  {room.is_private && (
-                    <span className="ml-2 text-xs bg-gray-200 text-gray-600 px-2 py-1 rounded-full">
-                      Gizli
-                    </span>
-                  )}
-                </h3>
-                {/* ... diğer odanın bilgileri (mode_name, oyuncu sayısı, status) ... */}
-                <p className="text-sm text-gray-500 mb-4">
-                  Mod:{' '}
-                  <span className="font-semibold text-blue-600">
-                    {room.mode_name}
-                  </span>
-                </p>
-                <div className="flex justify-between items-center mb-4">
-                  <p className="text-lg font-medium text-gray-700">
-                    Oyuncu:{' '}
-                    <span className="font-bold">{room.current_players}</span> /{' '}
-                    {room.max_players}
-                  </p>
-                  <span
-                    className={`px-3 py-1 text-sm font-semibold rounded-full 
-                            ${
-                              room.status === 'waiting'
-                                ? 'bg-green-100 text-green-800'
-                                : 'bg-yellow-100 text-yellow-800'
-                            }`}
-                  >
-                    {room.status === 'waiting' ? 'Bekliyor' : 'Oyunda'}
-                  </span>
-                </div>
-
-                {/* Buton Alanı */}
-                <button
-                  onClick={() => handleActionRoom(room.id, isUserMember)}
-                  disabled={buttonDisabled}
-                  className={`w-full py-2 mt-2 font-semibold rounded-lg transition-colors shadow-md
-                                disabled:bg-gray-400 disabled:cursor-not-allowed
-                                ${buttonClass} text-white`}
-                >
-                  {buttonText}
-                </button>
+            {!isLoading && !error && (
+              <div className="flex items-center gap-2 text-sm text-gray-400">
+                <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
+                Son güncelleme: {new Date().toLocaleTimeString('tr-TR')}
               </div>
-            );
-          })}
+            )}
+          </div>
+
+          {/* Loading State */}
+          {isLoading && (
+            <div className="flex flex-col items-center justify-center py-12">
+              <div className="w-12 h-12 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin mb-4"></div>
+              <p className="text-lg text-gray-400">Odalar yükleniyor...</p>
+            </div>
+          )}
+
+          {/* Error State */}
+          {error && (
+            <div className="p-6 bg-red-900/50 border border-red-700 rounded-xl text-center">
+              <div className="text-red-400 text-lg font-semibold mb-2">
+                Hata!
+              </div>
+              <p className="text-red-300 mb-4">{error}</p>
+              <button
+                onClick={handleRetry}
+                className="px-6 py-2 bg-gradient-to-r from-red-600 to-pink-600 text-white rounded-lg hover:from-red-700 hover:to-pink-700 transition-all duration-200"
+              >
+                Tekrar Dene ({3 - retryCount} deneme hakkınız kaldı)
+              </button>
+              {retryCount >= 3 && (
+                <p className="text-sm text-red-400 mt-3">
+                  Sürekli hata alıyorsanız, lütfen sayfayı yenileyin veya daha
+                  sonra tekrar deneyin.
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* Empty State */}
+          {!isLoading && !error && rooms.length === 0 && (
+            <div className="text-center py-12">
+              <div className="text-6xl mb-4 text-gray-400">🛋️</div>
+              <h3 className="text-xl font-semibold text-gray-300 mb-2">
+                Aktif oda bulunamadı
+              </h3>
+              <p className="text-gray-400">İlk odayı oluşturan siz olun!</p>
+            </div>
+          )}
+
+          {/* Rooms Grid */}
+          {!isLoading && !error && rooms.length > 0 && (
+            <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
+              {rooms.map((room) => {
+                const isFull = room.current_players >= room.max_players;
+                const canJoin = room.status === 'waiting' && !isFull;
+                const isUserMember = room.is_user_in_room;
+
+                let buttonText = 'Odaya Katıl';
+                let buttonDisabled = !canJoin && !isUserMember;
+
+                if (isUserMember) {
+                  buttonText = 'Oyuna Gir / Geri Dön';
+                  buttonDisabled = false;
+                } else if (isFull) {
+                  buttonText = 'Oda Dolu';
+                  buttonDisabled = true;
+                } else if (room.status !== 'waiting') {
+                  buttonText = 'Oyun Başladı';
+                  buttonDisabled = true;
+                }
+
+                const buttonClass = isUserMember
+                  ? 'bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700'
+                  : 'bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700';
+
+                return (
+                  <div
+                    key={room.id}
+                    className={`bg-gray-700/50 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 border-l-4 overflow-hidden backdrop-blur-sm
+                      ${isUserMember ? 'border-green-500' : 'border-indigo-500'}
+                      ${isFull ? 'opacity-60' : 'opacity-100'}`}
+                  >
+                    <div className="p-6">
+                      <div className="flex items-start justify-between mb-4">
+                        <h3 className="text-lg font-bold text-white truncate flex-1">
+                          {room.room_name}
+                        </h3>
+                        <div className="flex gap-2 ml-2">
+                          {isUserMember && (
+                            <span className="inline-flex items-center px-2 py-1 bg-green-900/50 text-green-300 text-xs font-bold rounded-full border border-green-700">
+                              SİZ
+                            </span>
+                          )}
+                          {room.is_private && (
+                            <span className="inline-flex items-center px-2 py-1 bg-gray-600 text-gray-300 text-xs rounded-full border border-gray-500">
+                              🔒 Gizli
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="space-y-3 mb-4">
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm text-gray-400">Mod:</span>
+                          <span className="font-semibold text-indigo-300">
+                            {room.mode_name}
+                          </span>
+                        </div>
+
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm text-gray-400">
+                            Oyuncular:
+                          </span>
+                          <span className="font-bold text-white">
+                            {room.current_players} / {room.max_players}
+                          </span>
+                        </div>
+
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm text-gray-400">Durum:</span>
+                          <span
+                            className={`px-3 py-1 rounded-full text-xs font-semibold border ${
+                              room.status === 'waiting'
+                                ? 'bg-green-900/30 text-green-300 border-green-700'
+                                : 'bg-yellow-900/30 text-yellow-300 border-yellow-700'
+                            }`}
+                          >
+                            {room.status === 'waiting'
+                              ? '🕐 Bekliyor'
+                              : '🎮 Oyunda'}
+                          </span>
+                        </div>
+                      </div>
+
+                      <button
+                        onClick={() => handleActionRoom(room.id, isUserMember)}
+                        disabled={buttonDisabled}
+                        className={`w-full py-3 px-4 text-white font-semibold rounded-xl transition-all duration-200 shadow-lg hover:shadow-xl disabled:bg-gray-600 disabled:cursor-not-allowed disabled:shadow-none ${buttonClass}`}
+                      >
+                        {buttonText}
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       </div>
     </div>

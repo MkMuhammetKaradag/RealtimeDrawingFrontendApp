@@ -49,7 +49,6 @@ const initialColorResult: ColorResult = {
   hsl: { h: 0, s: 0, l: 0, a: 1 },
 };
 
-// Ekran boyutunu kontrol eden basit bir hook ekleyelim
 const useIsDesktop = (breakpoint = 768) => {
   const [isDesktop, setIsDesktop] = useState(window.innerWidth >= breakpoint);
 
@@ -67,7 +66,7 @@ const useIsDesktop = (breakpoint = 768) => {
 
 const ColorPanel: FC<ColorPanelProps> = (props): JSX.Element => {
   const { className } = props;
-  const isDesktop = useIsDesktop(); // Yeni hook'u kullan
+  const isDesktop = useIsDesktop();
 
   const colorContext = useContext(ColorContext);
   const activeColorType: ColorType = colorContext.activeColor;
@@ -137,98 +136,143 @@ const ColorPanel: FC<ColorPanelProps> = (props): JSX.Element => {
     }
   };
 
-  // ----------------------------------------------------------------------
-  // KRİTİK DÜZENLEME: MOBİL İÇİN RENK SAYISI VE SÜTUN AYARI
-  // ----------------------------------------------------------------------
-
-  // Mobil: İlk 10 rengi (2 sıra) göster, Masaüstü: Tüm renkleri göster
-  const visibleColors = isDesktop ? colors : colors.slice(0, 10);
-
-  // Sütun Sayısı: Mobil 4, Masaüstü 7 (Daha az sıkışıklık için)
-  const gridColsClasses = isDesktop ? 'grid-cols-6' : 'grid-cols-4';
-
-  const panelClasses = `${className} relative w-full flex flex-row md:flex-col items-start md:items-center gap-3 p-1 md:p-0`;
-
-  const colorCardsClasses = 'flex items-center gap-3 md:mb-2 md:gap-3';
-
-  const colorToolsClasses = 'flex flex-col gap-3 w-auto md:w-full';
-
   return (
-    <div className={panelClasses}>
-      {/* Sol Taraf (Mobil) / Üst Taraf (Masaüstü): Renk Seçim Kartları */}
-      <div className={colorCardsClasses}>
-        {/* Ana Renk */}
-        <button
-          onClick={() => colorContext.setActiveColor(ColorValue.MAIN)}
-          title="Ana Rengi Seç (Renk 1)"
-          className={`group relative overflow-hidden rounded-lg transition-all duration-200 ${
-            activeColorType === ColorValue.MAIN
-              ? 'ring-2 ring-blue-500 ring-offset-1 scale-105'
-              : 'hover:scale-105 hover:shadow-md'
-          }`}
-        >
-          <div className="w-12 h-12 relative">
+    <div className={`${className} w-full`}>
+      {/* Mobil: Kompakt renk seçimi - Renk kartları + Özel renk butonu */}
+      <div className="md:hidden flex  gap-2">
+        {/* Renk Seçim Kartları - Mobilde daha kompakt */}
+        <div className="flex items-center justify-between gap-2">
+          {/* Ana Renk */}
+          <button
+            onClick={() => colorContext.setActiveColor(ColorValue.MAIN)}
+            title="Ana Rengi Seç"
+            className={`flex-1 flex flex-col items-center p-1 rounded-lg transition-all duration-200 border-2 ${
+              activeColorType === ColorValue.MAIN
+                ? 'border-blue-500 bg-blue-50 scale-105'
+                : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+            }`}
+          >
             <div
-              className="absolute inset-0 transition-transform duration-200 group-hover:scale-110"
+              className="w-8 h-8 rounded-md border border-gray-300"
               style={{
                 backgroundColor: colorContext.mainColor.substring(0, 7),
               }}
             />
-          </div>
-          <div className="bg-white/90 py-1 text-center border-t border-gray-200">
-            <span className="text-xs font-medium text-gray-700">Renk 1</span>
-          </div>
-        </button>
+            <span className="text-xs text-gray-700 mt-1 font-medium">1</span>
+          </button>
 
-        {/* Değiştirme Butonu */}
-        <button
-          onClick={swapColors}
-          className="p-2 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-600 transition-all duration-200 hover:rotate-180"
-          title="Renkleri Değiştir"
-        >
-          <FaExchangeAlt className="text-sm" />
-        </button>
+          {/* Değiştirme Butonu */}
+          <button
+            onClick={swapColors}
+            className="p-2 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-600 transition-all duration-200 hover:rotate-180 flex items-center justify-center"
+            title="Renkleri Değiştir"
+          >
+            <FaExchangeAlt className="text-sm" />
+          </button>
 
-        {/* İkincil Renk */}
-        <button
-          onClick={() => colorContext.setActiveColor(ColorValue.SUB)}
-          title="İkincil Rengi Seç (Renk 2)"
-          className={`group relative overflow-hidden rounded-lg transition-all duration-200 ${
-            activeColorType === ColorValue.SUB
-              ? 'ring-2 ring-blue-500 ring-offset-1 scale-105'
-              : 'hover:scale-105 hover:shadow-md'
-          }`}
-        >
-          <div className="w-12 h-12 relative">
+          {/* İkincil Renk */}
+          <button
+            onClick={() => colorContext.setActiveColor(ColorValue.SUB)}
+            title="İkincil Rengi Seç"
+            className={`flex-1 flex flex-col items-center p-1 rounded-lg transition-all duration-200 border-2 ${
+              activeColorType === ColorValue.SUB
+                ? 'border-blue-500 bg-blue-50 scale-105'
+                : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+            }`}
+          >
             <div
-              className="absolute inset-0 transition-transform duration-200 group-hover:scale-110"
+              className="w-8 h-8 rounded-md border border-gray-300"
               style={{ backgroundColor: colorContext.subColor.substring(0, 7) }}
             />
-          </div>
-          <div className="bg-white/90 py-1 text-center border-t border-gray-200">
-            <span className="text-xs font-medium text-gray-700">Renk 2</span>
-          </div>
+            <span className="text-xs text-gray-700 mt-1 font-medium">2</span>
+          </button>
+        </div>
+
+        {/* Özel Renk Seçici Butonu - Mobil */}
+        <button
+          onClick={handleOpenPicker}
+          title="Özel Renk Seç"
+          className="w-full flex items-center justify-center gap-2 py-2 px-3 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white text-sm font-medium rounded-lg shadow hover:shadow-md transition-all duration-200"
+        >
+          <FaPalette className="text-sm" />
+          renk
         </button>
       </div>
 
-      {/* Sağ Taraf (Mobil) / Alt Taraf (Masaüstü): Palet ve Özel Renk Seçici */}
-      <div className={colorToolsClasses}>
+      {/* Masaüstü: Tam renk paneli */}
+      <div className="hidden md:flex flex-col items-center gap-3 w-full">
+        {/* Renk Seçim Kartları */}
+        <div className="flex items-center gap-3 w-full justify-center">
+          {/* Ana Renk */}
+          <button
+            onClick={() => colorContext.setActiveColor(ColorValue.MAIN)}
+            title="Ana Rengi Seç (Renk 1)"
+            className={`group relative overflow-hidden rounded-lg transition-all duration-200 ${
+              activeColorType === ColorValue.MAIN
+                ? 'ring-2 ring-blue-500 ring-offset-1 scale-105'
+                : 'hover:scale-105 hover:shadow-md'
+            }`}
+          >
+            <div className="w-12 h-12 relative">
+              <div
+                className="absolute inset-0 transition-transform duration-200 group-hover:scale-110"
+                style={{
+                  backgroundColor: colorContext.mainColor.substring(0, 7),
+                }}
+              />
+            </div>
+            <div className="bg-white/90 py-1 text-center border-t border-gray-200">
+              <span className="text-xs font-medium text-gray-700">Renk 1</span>
+            </div>
+          </button>
+
+          {/* Değiştirme Butonu */}
+          <button
+            onClick={swapColors}
+            className="p-2 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-600 transition-all duration-200 hover:rotate-180"
+            title="Renkleri Değiştir"
+          >
+            <FaExchangeAlt className="text-sm" />
+          </button>
+
+          {/* İkincil Renk */}
+          <button
+            onClick={() => colorContext.setActiveColor(ColorValue.SUB)}
+            title="İkincil Rengi Seç (Renk 2)"
+            className={`group relative overflow-hidden rounded-lg transition-all duration-200 ${
+              activeColorType === ColorValue.SUB
+                ? 'ring-2 ring-blue-500 ring-offset-1 scale-105'
+                : 'hover:scale-105 hover:shadow-md'
+            }`}
+          >
+            <div className="w-12 h-12 relative">
+              <div
+                className="absolute inset-0 transition-transform duration-200 group-hover:scale-110"
+                style={{
+                  backgroundColor: colorContext.subColor.substring(0, 7),
+                }}
+              />
+            </div>
+            <div className="bg-white/90 py-1 text-center border-t border-gray-200">
+              <span className="text-xs font-medium text-gray-700">Renk 2</span>
+            </div>
+          </button>
+        </div>
+
         {/* Ön Tanımlı Renk Paleti */}
-        {/* Sütun sayısı ve renk sayısı artık koşullu */}
-        <div className={`grid ${gridColsClasses} gap-2`}>
-          {visibleColors.map((color) => (
+        <div className="grid grid-cols-6 gap-2 w-full">
+          {colors.map((color) => (
             <button
               onClick={() => colorContext.setColor('#' + color.value)}
               key={color.value}
               title={color.title}
-              // Mobil/Masaüstü boyutları korunmuştur
-              className="w-5 h-5  md:w-6 md:h-6 rounded border border-gray-300 hover:border-gray-500 hover:scale-110 active:scale-95 transition-all duration-150 shadow-sm hover:shadow-md"
+              className="w-6 h-6 rounded border border-gray-300 hover:border-gray-500 hover:scale-110 active:scale-95 transition-all duration-150 shadow-sm hover:shadow-md"
               style={{ backgroundColor: '#' + color.value.substring(0, 6) }}
             />
           ))}
         </div>
 
-        {/* Renk Seçiciyi Açma Butonu */}
+        {/* Özel Renk Seçici Butonu */}
         <button
           onClick={handleOpenPicker}
           title="Özel Renk Seç"
@@ -239,7 +283,7 @@ const ColorPanel: FC<ColorPanelProps> = (props): JSX.Element => {
         </button>
       </div>
 
-      {/* Sketch Renk Seçici */}
+      {/* Sketch Renk Seçici (Her iki durumda da ortak) */}
       <CustomPopover
         open={isPickerOpen}
         onClose={() => setIsPickerOpen(false)}
