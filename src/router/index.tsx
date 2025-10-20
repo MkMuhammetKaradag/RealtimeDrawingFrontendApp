@@ -25,7 +25,7 @@ const GamePage = lazy(() => import('../pages/GamePage/GamePage'));
 // Korumalı Yol Bileşeni
 const ProtectedRoute: FC<ProtectedRouteProps> = ({ children }) => {
   const isAuthenticated = useAppSelector(selectIsAuthenticated);
-  const authStatus = useAppSelector(selectAuthStatus);
+  //const authStatus = useAppSelector(selectAuthStatus);
 
   // if (authStatus === 'loading') {
   //   return (

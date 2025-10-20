@@ -35,6 +35,7 @@ const GamePage: React.FC = () => {
     game_mode_id: 1,
   });
   const [isStatusInfoVisible, setIsStatusInfoVisible] = useState(true);
+  const [gameOverData, setGameOverData] = useState<any>(null);
 
   // WebSocket bağlantısı
   const {
@@ -145,8 +146,9 @@ const GamePage: React.FC = () => {
         break;
 
       case 'game_over':
-        setCurrentStatus('idle');
+        setCurrentStatus('ended');
         setPlayerRole(null);
+        setGameOverData(message.content);
         break;
 
       case 'round_start_drawer':
@@ -334,6 +336,7 @@ const GamePage: React.FC = () => {
                     gameStatus={currentStatus}
                     sendMessage={sendMessage}
                     roomDrawData={roomDrawData}
+                    gameOverData={gameOverData} // Yeni prop
                   />
                 </div>
 
