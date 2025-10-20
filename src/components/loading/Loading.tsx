@@ -18,13 +18,11 @@ export const Loading = ({
     large: 'w-12 h-12',
   };
 
-  const containerClasses = fullScreen
-    ? 'min-h-screen bg-gray-50'
-    : 'min-h-[200px]';
+  const containerClasses = fullScreen ? 'min-h-screen ' : 'min-h-[200px]';
 
   return (
     <div
-      className={`flex flex-col justify-center items-center ${containerClasses} ${className}`}
+      className={`flex flex-col bg-gradient-to-br from-gray-900 via-purple-900 to-indigo-900 p-4 sm:p-6 lg:p-8 justify-center items-center ${containerClasses} ${className}`}
       role="status"
       aria-live="polite"
     >

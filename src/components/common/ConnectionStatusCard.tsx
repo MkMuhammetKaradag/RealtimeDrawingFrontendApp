@@ -15,7 +15,7 @@ const ConnectionStatusCard: React.FC<ConnectionStatusCardProps> = ({
 }) => {
   if (status === 'connecting') {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-gray-900">
+      <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-indigo-900 ">
         <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-indigo-500"></div>
         <p className="text-white text-xl ml-4">Odaya bağlanılıyor...</p>
       </div>
@@ -24,7 +24,7 @@ const ConnectionStatusCard: React.FC<ConnectionStatusCardProps> = ({
 
   if (status === 'error' || status === 'disconnected') {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-gray-900 p-4">
+      <div className="flex items-center justify-center min-h-screen  p-4 bg-gradient-to-br from-gray-900 via-purple-900 to-indigo-900 ">
         <div className="w-full max-w-md p-8 bg-white border-t-4 border-red-600 rounded-xl shadow-2xl">
           <h2 className="text-3xl font-extrabold text-red-600 mb-4 text-center">
             Bağlantı Kesildi! 🔴

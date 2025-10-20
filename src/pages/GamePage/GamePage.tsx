@@ -170,8 +170,8 @@ const GamePage: React.FC = () => {
         if (message.game_data) {
           const data = message.game_data;
           const myId = currentUser?.id;
-
-          if (data.mode_data?.HostId && myId === data.mode_data.HostId) {
+          console.log('Gelen Oyun Durumu Verisi:', message);
+          if (message.is_host === true) {
             setIsRoomHost(true);
           } else {
             setIsRoomHost(false);

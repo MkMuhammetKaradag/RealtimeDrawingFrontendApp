@@ -27,15 +27,15 @@ const ProtectedRoute: FC<ProtectedRouteProps> = ({ children }) => {
   const isAuthenticated = useAppSelector(selectIsAuthenticated);
   const authStatus = useAppSelector(selectAuthStatus);
 
-  if (authStatus === 'loading') {
-    return (
-      <Loading
-        message="Güvenlik kontrolü yapılıyor..."
-        size="medium"
-        fullScreen={true}
-      />
-    );
-  }
+  // if (authStatus === 'loading') {
+  //   return (
+  //     <Loading
+  //       message="Güvenlik kontrolü yapılıyor..."
+  //       size="medium"
+  //       fullScreen={true}
+  //     />
+  //   );
+  // }
 
   if (!isAuthenticated) {
     return <Navigate to="/auth" replace />;
