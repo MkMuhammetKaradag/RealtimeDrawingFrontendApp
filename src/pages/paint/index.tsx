@@ -31,7 +31,7 @@ import {
   UNDO_EVENT,
 } from '../../util/dispatcher/event';
 import { useNavigate } from 'react-router-dom';
-import MiniCanvas from '../../components/canvas/MiniCanvas';
+
 import SimpleMiniCanvas from '../../components/canvas/SimpleMiniCanvas';
 
 interface PaintProps {
@@ -433,6 +433,8 @@ const Paint: React.FC<PaintProps> = ({
                         Çizim Önizleme:
                       </div>
                       <SimpleMiniCanvas
+                        key={round.roundNumber}
+                        roundId={round.roundNumber}
                         actions={player.actions}
                         width={180}
                         height={120}
