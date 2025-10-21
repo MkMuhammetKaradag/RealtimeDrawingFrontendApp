@@ -3,23 +3,77 @@ import type { ParsedAction } from '../../pages/paint';
 import { Tool } from '../../util/tool';
 import { Pen, Eraser, ColorFill } from '../../util/tool';
 import Shape from '../../util/tool/shape';
+import { LINE_WIDTH_FACTORS } from '.';
+import type { LineWidthType } from '../../util/toolType';
 
 interface SimpleMiniCanvasProps {
   actions: ParsedAction[];
   width?: number;
   height?: number;
   roundId?: string | number;
+  className?: string;
 }
+
+// Ana canvas'taki line width factors - aynısını kullanıyoruz
+
+// Line width type için type tanımı
+
+// Ana canvas'taki normalize fonksiyonunun mini canvas versiyonu
+const getNormalizedLineWidthFactor = (
+  lineWidthType: LineWidthType,
+  canvasWidth: number
+): number => {
+  const baseFactor = LINE_WIDTH_FACTORS[lineWidthType] || 1;
+  // Mini canvas için reference width daha küçük - ana canvas 1200 iken bu 400
+  const referenceWidth = 1200;
+  const normalizedFactor = baseFactor * (canvasWidth / referenceWidth);
+
+  // Mini canvas için minimum ve maximum değerleri ayarla
+  return Math.max(0.3, Math.min(normalizedFactor, baseFactor * 1.5));
+};
 
 const SimpleMiniCanvas: React.FC<SimpleMiniCanvasProps> = ({
   actions,
   width = 180,
   height = 120,
   roundId,
+  className = '',
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const toolRef = useRef<Tool | null>(null);
-  const isInitializedRef = useRef<boolean>(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // Responsive width ve height için state
+  const [responsiveSize, setResponsiveSize] = React.useState({
+    width,
+    height,
+  });
+
+  // Container boyutuna göre responsive sizing
+  useEffect(() => {
+    const updateSize = () => {
+      if (containerRef.current) {
+        const containerWidth = containerRef.current.clientWidth;
+        // Aspect ratio'yu koruyarak height hesapla (16:9 oranı)
+        const calculatedHeight = (containerWidth * 9) / 16;
+
+        setResponsiveSize({
+          width: containerWidth,
+          height: Math.max(calculatedHeight, 80), // Minimum height
+        });
+      }
+    };
+
+    updateSize();
+    window.addEventListener('resize', updateSize);
+
+    return () => {
+      window.removeEventListener('resize', updateSize);
+    };
+  }, []);
+
+  const actualWidth = responsiveSize.width;
+  const actualHeight = responsiveSize.height;
 
   // Ana canvas'daki createDummyMouseEvent benzeri
   const createDummyMouseEvent = useCallback(
@@ -67,20 +121,21 @@ const SimpleMiniCanvas: React.FC<SimpleMiniCanvasProps> = ({
     if (!ctx) return;
 
     // ✅ CANVAS'I HER ACTIONS DEĞİŞİMİNDE SIFIRLA
-    // (yeni round = yeni actions dizisi)
     ctx.fillStyle = 'white';
-    ctx.fillRect(0, 0, width, height);
+    ctx.fillRect(0, 0, actualWidth, actualHeight);
 
     // Tool context'ini ayarla
     Tool.ctx = ctx;
-    Tool.lineWidthFactor = 2;
+
+    // Mini canvas için line width factor - daha küçük değerler
+    Tool.lineWidthFactor = 1;
 
     // Her action'ı ana canvas'daki gibi işle
     actions.forEach((action) => {
       if (!action.normX || !action.normY) return;
 
-      const x = action.normX * width;
-      const y = action.normY * height;
+      const x = action.normX * actualWidth;
+      const y = action.normY * actualHeight;
 
       // Orijinal state'i sakla
       const originalState = {
@@ -91,8 +146,18 @@ const SimpleMiniCanvas: React.FC<SimpleMiniCanvasProps> = ({
 
       // Gelen action'ın özelliklerini uygula
       if (action.color) Tool.mainColor = action.color;
-      if (action.lineWidth)
-        Tool.lineWidthFactor = Math.max(1, action.lineWidth * 2);
+      const rect = canvas.getBoundingClientRect();
+      // ✅ ÇİZGİ KALINLIĞINI NORMALİZE ET
+      if (action.lineWidthType) {
+        // lineWidthType varsa onu kullan
+        Tool.lineWidthFactor = getNormalizedLineWidthFactor(
+          action.lineWidthType as LineWidthType,
+          rect.width
+        );
+      } else {
+        // Hiçbiri yoksa default thin
+        Tool.lineWidthFactor = getNormalizedLineWidthFactor('THIN', rect.width);
+      }
 
       try {
         const dummyEvent = createDummyMouseEvent(x, y, action.function);
@@ -120,6 +185,8 @@ const SimpleMiniCanvas: React.FC<SimpleMiniCanvasProps> = ({
 
           case 'canvas_clear':
             // Clear işlemi zaten yukarıda yapıldı
+            ctx.fillStyle = 'white';
+            ctx.fillRect(0, 0, actualWidth, actualHeight);
             break;
 
           default:
@@ -138,26 +205,89 @@ const SimpleMiniCanvas: React.FC<SimpleMiniCanvasProps> = ({
     // Debug border
     ctx.strokeStyle = '#e5e7eb';
     ctx.lineWidth = 1;
-    ctx.strokeRect(0, 0, width, height);
+    ctx.strokeRect(0, 0, actualWidth, actualHeight);
   }, [
     actions,
-    width,
-    height,
+    actualWidth,
+    actualHeight,
     roundId,
     createToolInstance,
     createDummyMouseEvent,
-  ]); // ✅ actions değiştiğinde sıfırlanacak
+  ]);
 
   return (
-    <div className="relative">
+    <div
+      ref={containerRef}
+      className={`
+        relative 
+        w-full 
+        aspect-video // 16:9 aspect ratio - Tailwind'in built-in class'ı
+        max-w-full // Mobilde taşmayı engelle
+        overflow-hidden // Taşan içeriği kes
+        rounded-lg 
+        border border-gray-300 
+        bg-white 
+        shadow-sm
+        touch-pan-x touch-pan-y // Touch gesture desteği
+        ${className}
+      `}
+      style={{
+        // Custom width varsa uygula, yoksa responsive olsun
+        maxWidth: width !== 180 ? `${width}px` : undefined,
+      }}
+    >
       <canvas
         ref={canvasRef}
-        width={width}
-        height={height}
-        className="bg-white rounded border border-gray-300 shadow-sm"
+        width={actualWidth}
+        height={actualHeight}
+        className="
+          w-full 
+          h-full 
+          object-contain // Resmi oranlı şekilde sığdır
+          touch-action: none // Tailwind v3.4+ için touch-action kontrolü
+        "
+        // Eski Tailwind versiyonları için inline style
+        style={{ touchAction: 'none' }}
       />
-      <div className="absolute bottom-1 right-1 text-xs text-gray-500 bg-white/80 px-1 rounded">
+
+      {/* İşlem sayısı */}
+      <div
+        className="
+        absolute 
+        bottom-2 right-2 
+        text-xs 
+        text-gray-600 
+        bg-white/90 
+        backdrop-blur-sm
+        px-2 py-1 
+        rounded-md 
+        border border-gray-200
+        shadow-sm
+      "
+      >
         {actions.filter((a) => a.function.includes('draw')).length} işlem
+        {roundId && ` • R${roundId}`}
+      </div>
+
+      {/* Mobil hint - sadece mobilde göster */}
+      <div
+        className="
+        absolute 
+        top-2 left-2 
+        text-xs 
+        text-gray-500 
+        bg-white/90 
+        backdrop-blur-sm
+        px-2 py-1 
+        rounded-md 
+        border border-gray-200
+        shadow-sm
+        md:hidden // Medium ve üstü ekranlarda gizle
+        flex items-center gap-1
+      "
+      >
+        <span>📱</span>
+        <span>Pinch to zoom</span>
       </div>
     </div>
   );

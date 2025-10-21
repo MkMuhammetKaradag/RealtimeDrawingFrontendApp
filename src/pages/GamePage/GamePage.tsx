@@ -155,7 +155,9 @@ const GamePage: React.FC = () => {
         setCurrentStatus('started');
         setPlayerRole('drawer');
         break;
-
+      case 'round_preparation':
+        setPlayerRole(null);
+        break;
       case 'round_start_guesser':
         setCurrentStatus('started');
         setPlayerRole('guesser');

@@ -84,7 +84,7 @@ interface CanvasCoordinates {
 }
 
 // Constants
-const LINE_WIDTH_FACTORS = {
+export  const LINE_WIDTH_FACTORS = {
   [LineWidthValue.THIN]: 1,
   [LineWidthValue.MIDDLE]: 2,
   [LineWidthValue.BOLD]: 3,

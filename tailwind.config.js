@@ -4,6 +4,9 @@ export default {
   content: ['./index.html', './src/**/*.{js,ts,jsx,tsx}'],
   theme: {
     extend: {
+      aspectRatio: {
+        video: '16/9',
+      },
       animation: {
         float: 'float 3s linear infinite',
         shake: 'shake 0.5s ease-in-out',
