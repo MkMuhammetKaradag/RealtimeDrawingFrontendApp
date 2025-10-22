@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useCallback } from 'react';
+import React, { useRef, useEffect, useCallback, useState } from 'react';
 import type { ParsedAction } from '../../pages/paint';
 import { Tool } from '../../util/tool';
 import { Pen, Eraser, ColorFill } from '../../util/tool';
@@ -12,23 +12,17 @@ interface SimpleMiniCanvasProps {
   height?: number;
   roundId?: string | number;
   className?: string;
+  animationDuration?: number; // Yeni prop: animasyon süresi (ms)
+  autoPlay?: boolean; // Yeni prop: otomatik oynatma
 }
 
-// Ana canvas'taki line width factors - aynısını kullanıyoruz
-
-// Line width type için type tanımı
-
-// Ana canvas'taki normalize fonksiyonunun mini canvas versiyonu
 const getNormalizedLineWidthFactor = (
   lineWidthType: LineWidthType,
   canvasWidth: number
 ): number => {
   const baseFactor = LINE_WIDTH_FACTORS[lineWidthType] || 1;
-  // Mini canvas için reference width daha küçük - ana canvas 1200 iken bu 400
   const referenceWidth = 1200;
   const normalizedFactor = baseFactor * (canvasWidth / referenceWidth);
-
-  // Mini canvas için minimum ve maximum değerleri ayarla
   return Math.max(0.3, Math.min(normalizedFactor, baseFactor * 1.5));
 };
 
@@ -38,28 +32,43 @@ const SimpleMiniCanvas: React.FC<SimpleMiniCanvasProps> = ({
   height = 120,
   roundId,
   className = '',
+  animationDuration = 10000, // Default 10 saniye
+  autoPlay = true, // Default olarak otomatik oynat
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const toolRef = useRef<Tool | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Responsive width ve height için state
+  // Animasyon state'leri
+  const [currentStep, setCurrentStep] = useState(0);
+  const [isPlaying, setIsPlaying] = useState(autoPlay);
+  const [progress, setProgress] = useState(0);
+
   const [responsiveSize, setResponsiveSize] = React.useState({
     width,
     height,
   });
 
-  // Container boyutuna göre responsive sizing
+  // Filtrelenmiş çizim action'ları
+  const drawingActions = React.useMemo(
+    () =>
+      actions.filter(
+        (action) =>
+          action.function.includes('draw') || action.function === 'canvas_clear'
+      ),
+    [actions]
+  );
+
+  const totalSteps = drawingActions.length;
+
   useEffect(() => {
     const updateSize = () => {
       if (containerRef.current) {
         const containerWidth = containerRef.current.clientWidth;
-        // Aspect ratio'yu koruyarak height hesapla (16:9 oranı)
         const calculatedHeight = (containerWidth * 9) / 16;
-
         setResponsiveSize({
           width: containerWidth,
-          height: Math.max(calculatedHeight, 80), // Minimum height
+          height: Math.max(calculatedHeight, 80),
         });
       }
     };
@@ -75,7 +84,6 @@ const SimpleMiniCanvas: React.FC<SimpleMiniCanvasProps> = ({
   const actualWidth = responsiveSize.width;
   const actualHeight = responsiveSize.height;
 
-  // Ana canvas'daki createDummyMouseEvent benzeri
   const createDummyMouseEvent = useCallback(
     (x: number, y: number, type: string): MouseEvent => {
       return {
@@ -91,7 +99,6 @@ const SimpleMiniCanvas: React.FC<SimpleMiniCanvasProps> = ({
     []
   );
 
-  // Tool instance oluşturma - ana canvas'daki gibi
   const createToolInstance = useCallback(
     (action: ParsedAction): Tool | null => {
       switch (action.toolType) {
@@ -113,107 +120,179 @@ const SimpleMiniCanvas: React.FC<SimpleMiniCanvasProps> = ({
     []
   );
 
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
+  // Çizim fonksiyonu - belirli bir adıma kadar çizer
+  const drawUpToStep = useCallback(
+    (step: number) => {
+      const canvas = canvasRef.current;
+      if (!canvas) return;
 
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
 
-    // ✅ CANVAS'I HER ACTIONS DEĞİŞİMİNDE SIFIRLA
-    ctx.fillStyle = 'white';
-    ctx.fillRect(0, 0, actualWidth, actualHeight);
+      // Canvas'ı temizle
+      ctx.fillStyle = 'white';
+      ctx.fillRect(0, 0, actualWidth, actualHeight);
 
-    // Tool context'ini ayarla
-    Tool.ctx = ctx;
-
-    // Mini canvas için line width factor - daha küçük değerler
-    Tool.lineWidthFactor = 1;
-
-    // Her action'ı ana canvas'daki gibi işle
-    actions.forEach((action) => {
-      if (!action.normX || !action.normY) return;
-
-      const x = action.normX * actualWidth;
-      const y = action.normY * actualHeight;
-
-      // Orijinal state'i sakla
-      const originalState = {
-        mainColor: Tool.mainColor,
-        subColor: Tool.subColor,
-        lineWidthFactor: Tool.lineWidthFactor,
-      };
-
-      // Gelen action'ın özelliklerini uygula
-      if (action.color) Tool.mainColor = action.color;
-      const rect = canvas.getBoundingClientRect();
-      // ✅ ÇİZGİ KALINLIĞINI NORMALİZE ET
-      if (action.lineWidthType) {
-        // lineWidthType varsa onu kullan
-        Tool.lineWidthFactor = getNormalizedLineWidthFactor(
-          action.lineWidthType as LineWidthType,
-          rect.width
-        );
-      } else {
-        // Hiçbiri yoksa default thin
-        Tool.lineWidthFactor = getNormalizedLineWidthFactor('THIN', rect.width);
+      // İlk step'te sadece temizlik yap
+      if (step === 0) {
+        ctx.strokeStyle = '#e5e7eb';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(0, 0, actualWidth, actualHeight);
+        return;
       }
 
-      try {
-        const dummyEvent = createDummyMouseEvent(x, y, action.function);
+      Tool.ctx = ctx;
+      Tool.lineWidthFactor = 1;
 
-        switch (action.function) {
-          case 'draw_start':
-            toolRef.current = createToolInstance(action);
-            if (toolRef.current) {
-              toolRef.current.onMouseDown(dummyEvent);
-            }
-            break;
+      // Belirtilen adıma kadar çiz
+      for (let i = 0; i < step; i++) {
+        const action = drawingActions[i];
+        if (!action) continue;
 
-          case 'draw_move':
-            if (toolRef.current) {
-              toolRef.current.onMouseMove(dummyEvent);
-            }
-            break;
-
-          case 'draw_end':
-            if (toolRef.current) {
-              toolRef.current.onMouseUp(dummyEvent);
-              toolRef.current = null;
-            }
-            break;
-
-          case 'canvas_clear':
-            // Clear işlemi zaten yukarıda yapıldı
-            ctx.fillStyle = 'white';
-            ctx.fillRect(0, 0, actualWidth, actualHeight);
-            break;
-
-          default:
-            break;
+        // Clear action'ı özel işle
+        if (action.function === 'canvas_clear') {
+          ctx.fillStyle = 'white';
+          ctx.fillRect(0, 0, actualWidth, actualHeight);
+          continue;
         }
-      } catch (error) {
-        console.error('Error drawing action:', error);
-      } finally {
-        // Orijinal state'i geri yükle
-        Tool.mainColor = originalState.mainColor;
-        Tool.subColor = originalState.subColor;
-        Tool.lineWidthFactor = originalState.lineWidthFactor;
-      }
-    });
 
-    // Debug border
-    ctx.strokeStyle = '#e5e7eb';
-    ctx.lineWidth = 1;
-    ctx.strokeRect(0, 0, actualWidth, actualHeight);
-  }, [
-    actions,
-    actualWidth,
-    actualHeight,
-    roundId,
-    createToolInstance,
-    createDummyMouseEvent,
-  ]);
+        if (!action.normX || !action.normY) continue;
+
+        const x = action.normX * actualWidth;
+        const y = action.normY * actualHeight;
+
+        const originalState = {
+          mainColor: Tool.mainColor,
+          subColor: Tool.subColor,
+          lineWidthFactor: Tool.lineWidthFactor,
+        };
+
+        if (action.color) Tool.mainColor = action.color;
+        const rect = canvas.getBoundingClientRect();
+
+        if (action.lineWidthType) {
+          Tool.lineWidthFactor = getNormalizedLineWidthFactor(
+            action.lineWidthType as LineWidthType,
+            rect.width
+          );
+        } else {
+          Tool.lineWidthFactor = getNormalizedLineWidthFactor(
+            'THIN',
+            rect.width
+          );
+        }
+
+        try {
+          const dummyEvent = createDummyMouseEvent(x, y, action.function);
+
+          switch (action.function) {
+            case 'draw_start':
+              toolRef.current = createToolInstance(action);
+              if (toolRef.current) {
+                toolRef.current.onMouseDown(dummyEvent);
+              }
+              break;
+
+            case 'draw_move':
+              if (toolRef.current) {
+                toolRef.current.onMouseMove(dummyEvent);
+              }
+              break;
+
+            case 'draw_end':
+              if (toolRef.current) {
+                toolRef.current.onMouseUp(dummyEvent);
+                toolRef.current = null;
+              }
+              break;
+
+            default:
+              break;
+          }
+        } catch (error) {
+          console.error('Error drawing action:', error);
+        } finally {
+          Tool.mainColor = originalState.mainColor;
+          Tool.subColor = originalState.subColor;
+          Tool.lineWidthFactor = originalState.lineWidthFactor;
+        }
+      }
+
+      // Debug border
+      ctx.strokeStyle = '#e5e7eb';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(0, 0, actualWidth, actualHeight);
+    },
+    [
+      drawingActions,
+      actualWidth,
+      actualHeight,
+      createToolInstance,
+      createDummyMouseEvent,
+    ]
+  );
+
+  // Animasyon effect'i
+  useEffect(() => {
+    if (!isPlaying || totalSteps === 0) return;
+
+    const startTime = Date.now();
+    let animationFrame: number;
+
+    const animate = () => {
+      const elapsed = Date.now() - startTime;
+      const newProgress = Math.min(elapsed / animationDuration, 1);
+
+      const newStep = Math.floor(newProgress * totalSteps);
+
+      setProgress(newProgress);
+      setCurrentStep(newStep);
+
+      if (newProgress < 1) {
+        animationFrame = requestAnimationFrame(animate);
+      } else {
+        setIsPlaying(false); // Animasyon tamamlandığında durdur
+      }
+    };
+
+    animationFrame = requestAnimationFrame(animate);
+
+    return () => {
+      if (animationFrame) {
+        cancelAnimationFrame(animationFrame);
+      }
+    };
+  }, [isPlaying, totalSteps, animationDuration]);
+
+  // Adım değiştiğinde çizimi güncelle
+  useEffect(() => {
+    drawUpToStep(currentStep);
+  }, [currentStep, drawUpToStep]);
+
+  // Boyut değiştiğinde çizimi sıfırla ve yeniden başlat
+  useEffect(() => {
+    setCurrentStep(0);
+    setProgress(0);
+    if (autoPlay) {
+      setIsPlaying(true);
+    }
+  }, [actualWidth, actualHeight, autoPlay]);
+
+  // Kontrol fonksiyonları
+  const play = () => setIsPlaying(true);
+  const pause = () => setIsPlaying(false);
+  const restart = () => {
+    setCurrentStep(0);
+    setProgress(0);
+    setIsPlaying(true);
+  };
+
+  const handleProgressChange = (newProgress: number) => {
+    const newStep = Math.floor(newProgress * totalSteps);
+    setProgress(newProgress);
+    setCurrentStep(newStep);
+    setIsPlaying(false);
+  };
 
   return (
     <div
@@ -221,18 +300,17 @@ const SimpleMiniCanvas: React.FC<SimpleMiniCanvasProps> = ({
       className={`
         relative 
         w-full 
-        aspect-video // 16:9 aspect ratio - Tailwind'in built-in class'ı
-        max-w-full // Mobilde taşmayı engelle
-        overflow-hidden // Taşan içeriği kes
+        aspect-video
+        max-w-full
+        overflow-hidden
         rounded-lg 
         border border-gray-300 
         bg-white 
         shadow-sm
-        touch-pan-x touch-pan-y // Touch gesture desteği
+        touch-pan-x touch-pan-y
         ${className}
       `}
       style={{
-        // Custom width varsa uygula, yoksa responsive olsun
         maxWidth: width !== 180 ? `${width}px` : undefined,
       }}
     >
@@ -243,52 +321,114 @@ const SimpleMiniCanvas: React.FC<SimpleMiniCanvasProps> = ({
         className="
           w-full 
           h-full 
-          object-contain // Resmi oranlı şekilde sığdır
-          touch-action: none // Tailwind v3.4+ için touch-action kontrolü
+          object-contain
+          touch-action: none
         "
-        // Eski Tailwind versiyonları için inline style
         style={{ touchAction: 'none' }}
       />
 
-      {/* İşlem sayısı */}
+      {/* Kontroller */}
       <div
         className="
-        absolute 
-        bottom-2 right-2 
-        text-xs 
-        text-gray-600 
-        bg-white/90 
-        backdrop-blur-sm
-        px-2 py-1 
-        rounded-md 
-        border border-gray-200
-        shadow-sm
-      "
+          absolute 
+          bottom-0 left-0 right-0
+          bg-gradient-to-t from-black/80 to-transparent
+          p-3
+          flex flex-col gap-2
+        "
       >
-        {actions.filter((a) => a.function.includes('draw')).length} işlem
-        {roundId && ` • R${roundId}`}
+        {/* Progress bar */}
+        {/* <div className="flex items-center gap-2">
+          <input
+            type="range"
+            min="0"
+            max="1"
+            step="0.01"
+            value={progress}
+            onChange={(e) => handleProgressChange(parseFloat(e.target.value))}
+            // Sınıf listesini güncelledik:
+            className="
+                flex-1 
+                h-2               
+                 bg-gray-600 
+                rounded-lg 
+                appearance-none 
+                cursor-pointer 
+                slider-thumb 
+              "
+            style={{
+              // Ayrıca, track'in tamamlanan kısmını renklendirmek için bir trick ekleyebiliriz (Tailwind'de zor bir stil)
+              // Bu, input'un sol tarafını (progress'i) renklendirmeye yarar.
+              backgroundSize: `${progress * 100}% 100%`,
+              backgroundRepeat: 'no-repeat',
+              backgroundImage:
+                'linear-gradient(to right, #4f46e5 0%, #4f46e5 100%)', // Mor (indigo-600) bir renklendirme
+            }}
+          />
+          <span className="text-white text-xs min-w-[40px]">
+            {Math.round(progress * 100)}%
+          </span>
+        </div> */}
+        {/* Kontrol butonları */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-1">
+            <button
+              onClick={isPlaying ? pause : play}
+              className="
+                p-1 
+                text-white 
+                hover:bg-white/20 
+                rounded 
+                transition-colors
+                flex items-center justify-center
+                w-8 h-8
+              "
+            >
+              {isPlaying ? '⏸️' : '▶️'}
+            </button>
+
+            <button
+              onClick={restart}
+              className="
+                p-1 
+                text-white 
+                hover:bg-white/20 
+                rounded 
+                transition-colors
+                flex items-center justify-center
+                w-8 h-8
+              "
+            >
+              🔄
+            </button>
+          </div>
+
+          {/* Bilgi */}
+          <div className="text-white text-xs">
+            {currentStep}/{totalSteps} işlem
+            {roundId && ` • R${roundId}`}
+          </div>
+        </div>
       </div>
 
-      {/* Mobil hint - sadece mobilde göster */}
-      <div
-        className="
-        absolute 
-        top-2 left-2 
-        text-xs 
-        text-gray-500 
-        bg-white/90 
-        backdrop-blur-sm
-        px-2 py-1 
-        rounded-md 
-        border border-gray-200
-        shadow-sm
-        md:hidden // Medium ve üstü ekranlarda gizle
-        flex items-center gap-1
-      "
-      >
-        <span>📱</span>
-        <span>Pinch to zoom</span>
-      </div>
+      {/* Oynatma durumu */}
+      {!isPlaying && progress > 0 && progress < 1 && (
+        <div
+          className="
+            absolute 
+            top-1/2 left-1/2 
+            transform -translate-x-1/2 -translate-y-1/2
+            bg-black/70 
+            text-white 
+            px-3 py-2 
+            rounded-lg 
+            text-sm
+            backdrop-blur-sm
+          "
+        >
+          Duraklatıldı
+        </div>
+      )}
     </div>
   );
 };
