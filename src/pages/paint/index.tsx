@@ -39,6 +39,7 @@ interface PaintProps {
   gameStatus: 'idle' | 'started' | 'ended' | 'waiting';
   sendMessage: (data: any) => void;
   roomDrawData: WebSocketMessage | null;
+  onNewGame?: () => void;
   gameOverData?: any;
 }
 
@@ -74,6 +75,7 @@ const Paint: React.FC<PaintProps> = ({
   sendMessage,
   roomDrawData,
   gameOverData,
+  onNewGame,
 }) => {
   // State'ler
   const [toolType, setToolType] = useState<ToolType>(ToolValue.PEN);
@@ -314,7 +316,7 @@ const Paint: React.FC<PaintProps> = ({
       })
       .filter(Boolean) as ParsedAction[];
   };
-  if (gameStatus === 'ended' && gameOverData) {
+  if (gameStatus === 'ended' && gameOverData && onNewGame) {
     console.log('🔍 gameOverData:', gameOverData);
     console.log('🔍 Parsed rounds:', rounds);
 
@@ -329,7 +331,8 @@ const Paint: React.FC<PaintProps> = ({
             </p>
             <div className="flex flex-col sm:flex-row space-y-3 sm:space-y-0 sm:space-x-4">
               <button
-                onClick={() => window.location.reload()}
+                // onClick={() => window.location.reload()}
+                onClick={onNewGame}
                 className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white px-6 py-3 rounded-lg font-semibold transition-all duration-200"
               >
                 🎮 Yeni Oyun Başlat
@@ -505,7 +508,7 @@ const Paint: React.FC<PaintProps> = ({
         {/* Butonlar */}
         <div className="flex flex-col sm:flex-row justify-center space-y-3 sm:space-y-0 sm:space-x-4 mt-8 pt-6 border-t border-gray-600">
           <button
-            onClick={() => window.location.reload()}
+            onClick={onNewGame}
             className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white px-6 py-3 rounded-lg font-semibold transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-105"
           >
             🎮 Yeni Oyun Başlat

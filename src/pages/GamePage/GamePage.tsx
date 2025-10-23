@@ -88,6 +88,15 @@ const GamePage: React.FC = () => {
     },
     [sendMessage]
   );
+  const handleNewGame = useCallback(() => {
+    // Tüm game state'lerini sıfırla
+    setPlayerRole(null);
+    setCurrentStatus('idle');
+    setIsStatusInfoVisible(true);
+    setGameOverData(null);
+
+    console.log("Yeni oyun başlatıldı, tüm state'ler sıfırlandı.");
+  }, []);
 
   // Oyun modu güncelleme
   const handleUpdateGameMode = async (modeId: number) => {
@@ -188,7 +197,7 @@ const GamePage: React.FC = () => {
           if (data.state === 'in_progress') {
             setCurrentStatus('started');
             if (data.mode_id == 1) {
-              const currentDrawerId = data.mode_data.CurrentDrawer;
+              const currentDrawerId = data.active_player;
               setPlayerRole(currentDrawerId === myId ? 'drawer' : 'guesser');
             } else {
               setPlayerRole('drawer');
@@ -338,7 +347,8 @@ const GamePage: React.FC = () => {
                     gameStatus={currentStatus}
                     sendMessage={sendMessage}
                     roomDrawData={roomDrawData}
-                    gameOverData={gameOverData} // Yeni prop
+                    gameOverData={gameOverData}
+                    onNewGame={handleNewGame}
                   />
                 </div>
 
