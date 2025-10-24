@@ -2,7 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { logoutUser } from '../../store/slices/authSlice';
 import type { AppDispatch, RootState } from '../../store/store';
-import { getVisibleRooms, type Room } from '../../services/game.service';
+import {
+  getVisibleRooms,
+  JoinRooms,
+  type Room,
+} from '../../services/game.service';
 import { hello } from '../../services/auth.service';
 import { useNavigate } from 'react-router-dom';
 
@@ -56,17 +60,28 @@ const HomePage = () => {
   };
 
   const attemptToConnectToRoom = (roomId: string) => {
-    console.log(`WebSocket bağlantısı deneniyor: ${roomId}`);
+    // console.log(`WebSocket bağlantısı deneniyor: ${roomId}`);
     navigate(`/game/${roomId}`);
   };
 
-  const handleActionRoom = (roomId: string, isUserInRoom: boolean) => {
+  const handleActionRoom = async (roomId: string, isUserInRoom: boolean) => {
     if (isUserInRoom) {
-      console.log(`[GERİ DÖN] Odaya bağlanılıyor: ${roomId}`);
+      // console.log(`[GERİ DÖN] Odaya bağlanılıyor: ${roomId}`);
       attemptToConnectToRoom(roomId);
     } else {
-      console.log(`[KATIL] Odaya katılma isteği: ${roomId}`);
-      attemptToConnectToRoom(roomId);
+      try {
+        const data = await JoinRooms(roomId);
+        console.log('Odaya katılma başarılı:', data);
+        attemptToConnectToRoom(roomId);
+      } catch (err) {
+        const errorMessage =
+          err instanceof Error
+            ? err.message
+            : 'Odaya katılırken bir sorunla karşılaşıldı.';
+        setError(errorMessage);
+      }
+
+      // console.log(`[KATIL] Odaya katılma isteği: ${roomId}`);
     }
   };
 
@@ -74,7 +89,7 @@ const HomePage = () => {
     e.preventDefault();
     if (privateRoomId.trim() === '') return;
 
-    console.log(`Özel Odaya Katılma ID: ${privateRoomId}`);
+    // console.log(`Özel Odaya Katılma ID: ${privateRoomId}`);
     attemptToConnectToRoom(privateRoomId.trim());
     setPrivateRoomId('');
   };
@@ -82,7 +97,7 @@ const HomePage = () => {
   const handleHello = async () => {
     try {
       const response = await hello();
-      console.log('Hello from server:', response);
+      // console.log('Hello from server:', response);
       alert('Hello from server: ' + JSON.stringify(response));
     } catch (error) {
       console.error('Hello request failed:', error);

@@ -1,6 +1,6 @@
 import Tool, { getPixelColorOnCanvas, getMousePos, getTouchPos } from './tool';
 import { ToolValue } from '../toolType';
-import { logColorExtract } from '../logger';
+// import { logColorExtract } from '../logger';
 
 /**
  * Renk Çıkarma (Color Extract) aracını temsil eden sınıf (Göz Damlası Aracı).
@@ -38,7 +38,7 @@ class ColorExtract extends Tool {
     this.setColor(color);
 
     // 3. Loglama: Renk çıkarma işlemini kaydeder.
-    logColorExtract(ToolValue.COLOR_EXTRACT, pos, color, isTouch);
+    // logColorExtract(ToolValue.COLOR_EXTRACT, pos, color, isTouch);
   }
 
   // --- Fare Olay Yöneticileri ---

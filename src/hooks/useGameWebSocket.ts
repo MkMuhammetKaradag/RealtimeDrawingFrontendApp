@@ -76,7 +76,7 @@ export const useGameWebSocket = ({
       };
 
       ws.current.onmessage = (event) => {
-        console.log('📨 Gelen mesaj:', event.data);
+        // console.log('📨 Gelen mesaj:', event.data);
         if (!isMounted) return;
 
         try {

@@ -84,7 +84,7 @@ interface CanvasCoordinates {
 }
 
 // Constants
-export  const LINE_WIDTH_FACTORS = {
+export const LINE_WIDTH_FACTORS = {
   [LineWidthValue.THIN]: 1,
   [LineWidthValue.MIDDLE]: 2,
   [LineWidthValue.BOLD]: 3,
@@ -102,7 +102,16 @@ const getNormalizedLineWidthFactor = (
 
   return Math.max(0.5, Math.min(normalizedFactor, baseFactor * 2));
 };
-
+function throttle<T extends (...args: any[]) => void>(fn: T, limit: number): T {
+  let lastRun = 0;
+  return function (this: any, ...args: any[]) {
+    const now = Date.now();
+    if (now - lastRun >= limit) {
+      fn.apply(this, args);
+      lastRun = now;
+    }
+  } as T;
+}
 const Canvas: FC<CanvasProps> = ({
   role,
   toolType,
@@ -437,7 +446,10 @@ const Canvas: FC<CanvasProps> = ({
       lineWidthType,
     ]
   );
-
+  const throttledSendDrawMove = useMemo(
+    () => throttle(sendDrawMessage, 5),
+    [sendDrawMessage]
+  );
   // Canvas Actions
   const clearCanvas = useCallback(() => {
     const ctx = Tool.ctx;
@@ -479,6 +491,9 @@ const Canvas: FC<CanvasProps> = ({
   }, [toolType, sendDrawMessage, snapshot]);
 
   // Drawing Handlers
+
+  const lastSentPoint = useRef<{ x: number; y: number } | null>(null);
+
   const handleDrawAction = useCallback(
     (
       action: 'start' | 'move' | 'end',
@@ -507,7 +522,7 @@ const Canvas: FC<CanvasProps> = ({
           ? 'mousemove'
           : 'mouseup';
       const event = createDummyMouseEvent(x, y, eventType);
-
+      const last = lastSentPoint.current;
       switch (action) {
         case 'start':
           toolRef.current.onMouseDown(event);
@@ -517,7 +532,12 @@ const Canvas: FC<CanvasProps> = ({
         case 'move':
           if (isDrawingRef.current) {
             toolRef.current.onMouseMove(event);
-            sendDrawMessage('draw_move', { normX, normY });
+            if (!last || Math.hypot(x - last.x, y - last.y) > 5) {
+              // 5px fark
+              throttledSendDrawMove('draw_move', { normX, normY });
+              // sendDrawMessage('draw_move', { normX, normY });
+              lastSentPoint.current = { x, y };
+            }
           }
           break;
         case 'end':
@@ -616,7 +636,7 @@ const Canvas: FC<CanvasProps> = ({
       dispatcher.off(REDO_EVENT, dispatcherCallbacks.handleRedo);
     };
   }, [dispatcherContext, dispatcherCallbacks]);
-
+  const lastRemotePointRef = useRef<{ x: number; y: number } | null>(null);
   // Remote Drawing Processing
   const processRemoteDraw = useCallback(() => {
     if (!roomDrawData || !Tool.ctx || !canvasRef.current) return;
@@ -664,6 +684,7 @@ const Canvas: FC<CanvasProps> = ({
 
       switch (actionType) {
         case 'draw_start':
+          lastRemotePointRef.current = null;
           remoteToolRef.current = createRemoteToolInstance(
             roomDrawData.content
           );
@@ -674,7 +695,37 @@ const Canvas: FC<CanvasProps> = ({
 
         case 'draw_move':
           if (remoteToolRef.current?.isDrawing) {
-            remoteToolRef.current.onMouseMove(dummyEvent);
+            const last = lastRemotePointRef.current;
+            const current = { x, y };
+
+            if (last) {
+              // İki nokta arasındaki mesafe
+              const dx = current.x - last.x;
+              const dy = current.y - last.y;
+              const distance = Math.sqrt(dx * dx + dy * dy);
+
+              // Her adımda kaç pikselde bir ara nokta oluşturulacak
+              const step = 3;
+
+              for (let i = 0; i < distance; i += step) {
+                const t = i / distance;
+                const interpX = last.x + dx * t;
+                const interpY = last.y + dy * t;
+
+                const interpEvent = createDummyMouseEvent(
+                  interpX,
+                  interpY,
+                  'draw_move'
+                );
+                remoteToolRef.current.onMouseMove(interpEvent);
+              }
+            } else {
+              // İlk nokta ise direkt kullan
+              remoteToolRef.current.onMouseMove(dummyEvent);
+            }
+
+            // Son noktayı güncelle
+            lastRemotePointRef.current = current;
           }
           break;
 
@@ -691,6 +742,7 @@ const Canvas: FC<CanvasProps> = ({
             );
             remoteToolRef.current = null;
           }
+          lastRemotePointRef.current = null;
           break;
 
         case 'canvas_clear':

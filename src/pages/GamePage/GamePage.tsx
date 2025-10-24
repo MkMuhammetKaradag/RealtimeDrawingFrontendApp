@@ -9,7 +9,7 @@ import GameSettingsForm from '../../components/game/GameSettingsForm';
 import GuessInputForm from '../../components/game/GuessInputForm';
 import GameStatusInfo from '../../components/game/GameStatusInfo';
 import ConnectionStatusCard from '../../components/common/ConnectionStatusCard';
-import { updateGameMode } from '../../services/game.service';
+import { LeaveRoom, updateGameMode } from '../../services/game.service';
 import type {
   GameSettings,
   PlayerRole,
@@ -95,7 +95,7 @@ const GamePage: React.FC = () => {
     setIsStatusInfoVisible(true);
     setGameOverData(null);
 
-    console.log("Yeni oyun başlatıldı, tüm state'ler sıfırlandı.");
+    // console.log("Yeni oyun başlatıldı, tüm state'ler sıfırlandı.");
   }, []);
 
   // Oyun modu güncelleme
@@ -108,7 +108,7 @@ const GamePage: React.FC = () => {
         ...prevSettings,
         game_mode_id: modeId,
       }));
-      console.log(`Oyun Modu ID ${modeId} olarak güncellendi (API).`);
+      // console.log(`Oyun Modu ID ${modeId} olarak güncellendi (API).`);
     } catch (error) {
       console.error('Oyun modu güncellenemedi:', error);
     }
@@ -131,6 +131,15 @@ const GamePage: React.FC = () => {
         text: guessText,
       },
     });
+  };
+  const handleActionLeaveRoom = async () => {
+    if (!room_id) return;
+    try {
+      await LeaveRoom(room_id);
+      navigate('/');
+    } catch (error) {
+      console.error('Odadan ayrılırken hata oluştu:', error);
+    }
   };
 
   // Ayarları güncelleme
@@ -175,7 +184,7 @@ const GamePage: React.FC = () => {
       case 'game_settings_updated':
         if (message.content) {
           setGameSettings(message.content as GameSettings);
-          console.log('Oyun Ayarları (WS) Güncellendi:', message.content);
+          // console.log('Oyun Ayarları (WS) Güncellendi:', message.content);
         }
         break;
 
@@ -183,7 +192,7 @@ const GamePage: React.FC = () => {
         if (message.game_data) {
           const data = message.game_data;
           const myId = currentUser?.id;
-          console.log('Gelen Oyun Durumu Verisi:', message);
+          // console.log('Gelen Oyun Durumu Verisi:', message);
           if (message.is_host === true) {
             setIsRoomHost(true);
           } else {
@@ -226,9 +235,9 @@ const GamePage: React.FC = () => {
               ...prev,
               game_mode_id: modeID,
             }));
-            console.log(
-              `Oyun Modu (WS) üzerinden ${modeID} olarak güncellendi.`
-            );
+            // console.log(
+            //   `Oyun Modu (WS) üzerinden ${modeID} olarak güncellendi.`
+            // );
           }
         }
         break;
@@ -277,6 +286,12 @@ const GamePage: React.FC = () => {
           </div>
 
           <div className="flex flex-wrap gap-3">
+            <div
+              className={`px-4 py-2 rounded-xl cursor-pointer text-sm font-semibold ${'bg-gradient-to-r from-yellow-600 to-amber-600 text-gray-900'}`}
+              onClick={handleActionLeaveRoom}
+            >
+              Ayrıl
+            </div>
             <div
               className={`px-4 py-2 rounded-xl text-sm font-semibold ${
                 connectionStatus === 'connected'

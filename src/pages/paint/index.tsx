@@ -107,7 +107,7 @@ const Paint: React.FC<PaintProps> = ({
   useEffect(() => {
     if (gameStatus === 'ended') {
       setShowGameOver(true);
-      console.log('🎮 Oyun bitti, galeri gösterilecek');
+      // console.log('🎮 Oyun bitti, galeri gösterilecek');
     } else {
       setShowGameOver(false);
     }
@@ -116,7 +116,7 @@ const Paint: React.FC<PaintProps> = ({
   // Debug fonksiyonu
   const logAction = useCallback((action: string, details?: any) => {
     if (process.env.NODE_ENV === 'development') {
-      console.log(`🎨 Çizim Eylemi: ${action}`, details || '');
+      // console.log(`🎨 Çizim Eylemi: ${action}`, details || '');
     }
   }, []);
 
@@ -240,10 +240,10 @@ const Paint: React.FC<PaintProps> = ({
   }, [roomDrawData, logAction]);
 
   const parseRoundData = (gameOverData: any): RoundData[] => {
-    console.log('🔍 parseRoundData input:', gameOverData);
+    // console.log('🔍 parseRoundData input:', gameOverData);
 
     if (!gameOverData?.rounds) {
-      console.log('❌ rounds bulunamadı');
+      // console.log('❌ rounds bulunamadı');
       return [];
     }
 
@@ -253,12 +253,12 @@ const Paint: React.FC<PaintProps> = ({
 
         // Yeni yapı: actions dizisi var mı?
         if (!roundData.actions || !Array.isArray(roundData.actions)) {
-          console.log(`⏭️ Round ${roundNumber} için actions bulunamadı`);
+          // console.log(`⏭️ Round ${roundNumber} için actions bulunamadı`);
           return null;
         }
 
         if (roundData.actions.length === 0) {
-          console.log(`⏭️ Round ${roundNumber} boş, atlanıyor`);
+          // console.log(`⏭️ Round ${roundNumber} boş, atlanıyor`);
           return null;
         }
 
@@ -269,11 +269,11 @@ const Paint: React.FC<PaintProps> = ({
           ),
         ];
 
-        console.log(`📊 Round ${roundNumber}:`, {
-          actionCount: roundData.actions.length,
-          contributors: contributors.length,
-          word: roundData.word,
-        });
+        // console.log(`📊 Round ${roundNumber}:`, {
+        //   actionCount: roundData.actions.length,
+        //   contributors: contributors.length,
+        //   word: roundData.word,
+        // });
 
         return {
           roundNumber,
@@ -284,7 +284,7 @@ const Paint: React.FC<PaintProps> = ({
       })
       .filter(Boolean) as RoundData[];
 
-    console.log('🔍 parseRoundData result:', result);
+    // console.log('🔍 parseRoundData result:', result);
     return result;
   };
 
@@ -310,15 +310,15 @@ const Paint: React.FC<PaintProps> = ({
             player_id: action.PlayerID, // PlayerID'yi de ekle
           };
         } catch (e) {
-          console.log('❌ JSON parse hatası:', e, action.Data);
+          // console.log('❌ JSON parse hatası:', e, action.Data);
           return null;
         }
       })
       .filter(Boolean) as ParsedAction[];
   };
   if (gameStatus === 'ended' && gameOverData && onNewGame) {
-    console.log('🔍 gameOverData:', gameOverData);
-    console.log('🔍 Parsed rounds:', rounds);
+    // console.log('🔍 gameOverData:', gameOverData);1
+    // console.log('🔍 Parsed rounds:', rounds);
 
     if (rounds.length === 0) {
       return (

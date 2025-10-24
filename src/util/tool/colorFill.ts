@@ -125,11 +125,11 @@ class ColorFill extends Tool {
     const x = Math.round(pos.x * dpr);
     const y = Math.round(pos.y * dpr);
 
-    console.log('🎨 ColorFill (Özel DPR):', {
-      inputPos: pos,
-      outputPos: { x, y },
-      dpr: dpr,
-    });
+    // console.log('🎨 ColorFill (Özel DPR):', {
+    //   inputPos: pos,
+    //   outputPos: { x, y },
+    //   dpr: dpr,
+    // });
 
     const color = new Color(Tool.mainColor);
 

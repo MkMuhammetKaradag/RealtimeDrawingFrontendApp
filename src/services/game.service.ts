@@ -95,3 +95,41 @@ export const updateGameMode = async (
     throw error;
   }
 };
+
+/**
+ * Odaya katılma
+ * @returns {Promise<any>}
+ */
+export const JoinRooms = async (
+  roomID: string,
+  roomCode: string = ''
+): Promise<any> => {
+  try {
+    const response = await api.post<any>(`/game/join-room/${roomID}`, {
+      room_code: roomCode,
+    });
+
+    return response.data;
+  } catch (error) {
+    // Hata yönetimi (örneğin loglama veya kullanıcıya bildirme)
+    console.error('Odaya katılırken hata oluştu:', error);
+    // Hatanın çağırıcı fonksiyonda ele alınması için tekrar fırlatıyoruz.
+    throw error;
+  }
+};
+/**
+ * Odadan ayrılma.
+ * @returns {Promise<any>}
+ */
+export const LeaveRoom = async (roomID: string): Promise<any> => {
+  try {
+    const response = await api.post<any>(`/game/leave-room/${roomID}`);
+
+    return response.data;
+  } catch (error) {
+    // Hata yönetimi (örneğin loglama veya kullanıcıya bildirme)
+    console.error('Odaya ayrılırken hata oluştu:', error);
+    // Hatanın çağırıcı fonksiyonda ele alınması için tekrar fırlatıyoruz.
+    throw error;
+  }
+};

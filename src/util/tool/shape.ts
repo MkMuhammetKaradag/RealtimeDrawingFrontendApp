@@ -7,7 +7,7 @@ import Tool, {
   updateImageData,
 } from './tool';
 import type { Point } from './tool';
-import { logShapeStart, logShapeMove, logShapeEnd } from '../logger';
+// import { logShapeStart, logShapeMove, logShapeEnd } from '../logger';
 
 /**
  * Şekil tipine göre çizilecek şeklin köşe noktalarını veya merkezini (daire için) hesaplar.
@@ -219,15 +219,15 @@ class Shape extends Tool {
     }
 
     // 4. Şekil başlangıcını loglar (kaydeder)
-    logShapeStart(
-      ToolValue.SHAPE,
-      this.type,
-      pos,
-      Tool.mainColor,
-      Tool.lineWidthFactor * this.lineWidthBase,
-      this.isDashed,
-      isTouch
-    );
+    // logShapeStart(
+    //   ToolValue.SHAPE,
+    //   this.type,
+    //   pos,
+    //   Tool.mainColor,
+    //   Tool.lineWidthFactor * this.lineWidthBase,
+    //   this.isDashed,
+    //   isTouch
+    // );
   }
 
   /**
@@ -280,7 +280,7 @@ class Shape extends Tool {
       }
 
       // 5. Şekil hareketini loglar
-      logShapeMove(ToolValue.SHAPE, this.type, this.mouseDownPos, pos, isTouch);
+      // logShapeMove(ToolValue.SHAPE, this.type, this.mouseDownPos, pos, isTouch);
     }
   }
 
@@ -321,15 +321,15 @@ class Shape extends Tool {
     }
 
     // 4. Şekil bitişini loglar
-    if (endPos) {
-      logShapeEnd(
-        ToolValue.SHAPE,
-        this.type,
-        this.mouseDownPos,
-        endPos,
-        isTouch
-      );
-    }
+    // if (endPos) {
+    //   logShapeEnd(
+    //     ToolValue.SHAPE,
+    //     this.type,
+    //     this.mouseDownPos,
+    //     endPos,
+    //     isTouch
+    //   );
+    // }
 
     // 5. Durumu sıfırlar
     this.isMouseDown = false;

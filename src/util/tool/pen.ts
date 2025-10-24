@@ -7,14 +7,14 @@ import Tool, {
   updateImageData,
 } from './tool';
 import type { Point } from './tool';
-import {
-  logDrawStart,
-  logDrawMove,
-  logDrawEnd,
-  logEraseStart,
-  logEraseMove,
-  logEraseEnd,
-} from '../logger';
+// import {
+//   logDrawStart,
+//   logDrawMove,
+//   logDrawEnd,
+//   logEraseStart,
+//   logEraseMove,
+//   logEraseEnd,
+// } from '../logger';
 
 /**
  * Kalem (Pen) aracını temsil eden sınıf.
@@ -59,23 +59,23 @@ class Pen extends Tool {
     this.previousPos = pos; // Başlangıç pozisyonunu kaydeder.
 
     // Loglama: Kalem mi Silgi mi olduğunu kontrol ederek ilgili logu kaydeder.
-    if (this.toolType === ToolValue.ERASER) {
-      logEraseStart(
-        this.toolType as any,
-        pos,
-        Tool.lineWidthFactor * this.lineWidthBase,
-        false // Dokunmatik değil
-      );
-    } else {
-      console.log('11111111111111111111111');
-      logDrawStart(
-        this.toolType as any,
-        pos,
-        this.drawColorType === ColorValue.MAIN ? Tool.mainColor : Tool.subColor,
-        Tool.lineWidthFactor * this.lineWidthBase,
-        false // Dokunmatik değil
-      );
-    }
+    // if (this.toolType === ToolValue.ERASER) {
+    //   logEraseStart(
+    //     this.toolType as any,
+    //     pos,
+    //     Tool.lineWidthFactor * this.lineWidthBase,
+    //     false // Dokunmatik değil
+    //   );
+    // } else {
+    //   // console.log('11111111111111111111111');
+    //   logDrawStart(
+    //     this.toolType as any,
+    //     pos,
+    //     this.drawColorType === ColorValue.MAIN ? Tool.mainColor : Tool.subColor,
+    //     Tool.lineWidthFactor * this.lineWidthBase,
+    //     false // Dokunmatik değil
+    //   );
+    // }
   }
 
   /**
@@ -98,11 +98,11 @@ class Pen extends Tool {
       this.previousPos = pos; // Mevcut noktayı sonraki hareket için önceki nokta olarak ayarlar.
 
       // Loglama: Çizim hareketini kaydeder.
-      if (this.toolType === ToolValue.ERASER) {
-        logEraseMove(this.toolType as any, pos, false);
-      } else {
-        logDrawMove(this.toolType as any, pos, false);
-      }
+      // if (this.toolType === ToolValue.ERASER) {
+      //   logEraseMove(this.toolType as any, pos, false);
+      // } else {
+      //   logDrawMove(this.toolType as any, pos, false);
+      // }
     }
   }
 
@@ -141,11 +141,11 @@ class Pen extends Tool {
       }
 
       // Loglama: Çizim bitişini kaydeder.
-      if (this.toolType === ToolValue.ERASER) {
-        logEraseEnd(this.toolType as any, this.previousPos, false);
-      } else {
-        logDrawEnd(this.toolType as any, this.previousPos, false);
-      }
+      // if (this.toolType === ToolValue.ERASER) {
+      //   logEraseEnd(this.toolType as any, this.previousPos, false);
+      // } else {
+      //   logDrawEnd(this.toolType as any, this.previousPos, false);
+      // }
     }
   }
 
@@ -190,23 +190,23 @@ class Pen extends Tool {
     const touchPos = getTouchPos(event.target as HTMLCanvasElement, event);
 
     // Touch için log çizim başlangıcı
-    if (this.toolType === ToolValue.ERASER) {
-      logEraseStart(
-        this.toolType as any,
-        touchPos,
-        Tool.lineWidthFactor * this.lineWidthBase,
-        true // Dokunmatik
-      );
-    } else {
-      console.log('2222222222222222222222222');
-      logDrawStart(
-        this.toolType as any,
-        touchPos,
-        this.drawColorType === ColorValue.MAIN ? Tool.mainColor : Tool.subColor,
-        Tool.lineWidthFactor * this.lineWidthBase,
-        true // Dokunmatik
-      );
-    }
+    // if (this.toolType === ToolValue.ERASER) {
+    //   logEraseStart(
+    //     this.toolType as any,
+    //     touchPos,
+    //     Tool.lineWidthFactor * this.lineWidthBase,
+    //     true // Dokunmatik
+    //   );
+    // } else {
+    //   // console.log('2222222222222222222222222');
+    //   logDrawStart(
+    //     this.toolType as any,
+    //     touchPos,
+    //     this.drawColorType === ColorValue.MAIN ? Tool.mainColor : Tool.subColor,
+    //     Tool.lineWidthFactor * this.lineWidthBase,
+    //     true // Dokunmatik
+    //   );
+    // }
 
     this.operateStart(touchPos);
   }
@@ -218,11 +218,11 @@ class Pen extends Tool {
     const touchPos = getTouchPos(event.target as HTMLCanvasElement, event);
 
     // Touch için log çizim hareketi
-    if (this.toolType === ToolValue.ERASER) {
-      logEraseMove(this.toolType as any, touchPos, true);
-    } else {
-      logDrawMove(this.toolType as any, touchPos, true);
-    }
+    // if (this.toolType === ToolValue.ERASER) {
+    //   logEraseMove(this.toolType as any, touchPos, true);
+    // } else {
+    //   logDrawMove(this.toolType as any, touchPos, true);
+    // }
 
     this.operateMove(touchPos);
   }
@@ -233,11 +233,11 @@ class Pen extends Tool {
     }
 
     // Touch için log çizim bitişi
-    if (this.toolType === ToolValue.ERASER) {
-      logEraseEnd(this.toolType as any, this.previousPos, true);
-    } else {
-      logDrawEnd(this.toolType as any, this.previousPos, true);
-    }
+    // if (this.toolType === ToolValue.ERASER) {
+    //   logEraseEnd(this.toolType as any, this.previousPos, true);
+    // } else {
+    //   logDrawEnd(this.toolType as any, this.previousPos, true);
+    // }
 
     this.operateEnd();
   }
