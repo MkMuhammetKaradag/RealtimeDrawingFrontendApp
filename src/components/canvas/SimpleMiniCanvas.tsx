@@ -3,8 +3,9 @@ import type { ParsedAction } from '../../pages/paint';
 import { Tool } from '../../util/tool';
 import { Pen, Eraser, ColorFill } from '../../util/tool';
 import Shape from '../../util/tool/shape';
-import { LINE_WIDTH_FACTORS } from '.';
+
 import type { LineWidthType } from '../../util/toolType';
+import { LINE_WIDTH_FACTORS } from '../../util/utils';
 
 interface SimpleMiniCanvasProps {
   actions: ParsedAction[];
